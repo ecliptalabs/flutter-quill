@@ -258,6 +258,15 @@ class QuillController extends ChangeNotifier {
 
   bool get hasRedo => document.hasRedo;
 
+  /// Ends the current history merge window.
+  ///
+  /// Subsequent local document changes will not merge with the history entry
+  /// recorded before this call. This does not modify the document or either
+  /// history stack.
+  void cutoffHistory() {
+    document.history.cutoff();
+  }
+
   /// clear editor
   void clear() {
     replaceText(0, plainTextEditingValue.text.length - 1, '',

@@ -1258,7 +1258,9 @@ class RenderEditor extends RenderEditableContainerBox
             ? endpoints.first
             : endpoints.last;
       } else {
-        endpoint = endpoints.first;
+        endpoint = selection.extentOffset < selection.baseOffset
+            ? endpoints.first
+            : endpoints.last;
       }
     }
 

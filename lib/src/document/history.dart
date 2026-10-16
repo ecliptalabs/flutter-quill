@@ -45,6 +45,11 @@ class History {
     stack.clear();
   }
 
+  /// Ends the current history merge window without changing either stack.
+  void cutoff() {
+    lastRecorded = 0;
+  }
+
   void record(Delta change, Delta before) {
     if (change.isEmpty) return;
     stack.redo.clear();
