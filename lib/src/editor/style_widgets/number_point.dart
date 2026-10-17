@@ -29,19 +29,6 @@ class QuillNumberPoint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!attrs.containsKey(Attribute.indent.key) && indentLevelCounts.isEmpty) {
-      return Container(
-        alignment: AlignmentDirectional.topEnd,
-        width: width,
-        padding: EdgeInsetsDirectional.only(end: padding),
-        color: backgroundColor,
-        child: Text(
-          withDot ? '$index.' : index,
-          style: style,
-          textAlign: textAlign,
-        ),
-      );
-    }
     return Container(
       alignment: AlignmentDirectional.topEnd,
       width: width,
@@ -51,6 +38,8 @@ class QuillNumberPoint extends StatelessWidget {
         withDot ? '$index.' : index,
         style: style,
         textAlign: textAlign,
+        maxLines: 1,
+        softWrap: false,
       ),
     );
   }

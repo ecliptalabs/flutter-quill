@@ -58,6 +58,22 @@ const List<String> romanNumbers = [
   'I'
 ];
 
+class _ListMarkerLayout {
+  const _ListMarkerLayout({
+    required this.width,
+    required this.padding,
+    required this.indentSize,
+    required this.resolvedIndices,
+    this.bulletAnchor,
+  });
+
+  final double width;
+  final double padding;
+  final double indentSize;
+  final List<String?> resolvedIndices;
+  final double? bulletAnchor;
+}
+
 class EditableTextBlock extends StatelessWidget {
   const EditableTextBlock({
     required this.block,
@@ -170,15 +186,40 @@ class EditableTextBlock extends StatelessWidget {
     final indentWidthBuilder = defaultStyles?.lists?.indentWidthBuilder ??
         TextBlockUtils.defaultIndentWidthBuilder;
 
-    final count = block.children.length;
+    final lines = Iterable.castFrom<dynamic, Line>(block.children).toList();
+    final count = lines.length;
     final children = <Widget>[];
     if (clearIndents) {
       indentLevelCounts.clear();
     }
+    final markerStyles = lines
+        .map((line) => _listMarkerStyle(line, defaultStyles!))
+        .toList(growable: false);
+    final markerLayout = _resolveListMarkerLayout(
+      context: context,
+      lines: lines,
+      markerStyles: markerStyles,
+      indentLevelCounts: indentLevelCounts,
+      numberPointWidthBuilder: numberPointWidthBuilder,
+    );
     var index = 0;
-    for (final line in Iterable.castFrom<dynamic, Line>(block.children)) {
+    for (final line in lines) {
       index++;
-      final markerStyle = _listMarkerStyle(line, defaultStyles!);
+      final markerStyle = markerStyles[index - 1];
+      final lineSpacing = _listIndentSpacing(
+        context: context,
+        line: line,
+        count: count,
+        markerStyle: markerStyle,
+        markerWidth: markerLayout?.width,
+        indentSize: markerLayout?.indentSize,
+        indentWidthBuilder: indentWidthBuilder,
+        numberPointWidthBuilder: numberPointWidthBuilder,
+      );
+      final markerAnchor = markerLayout?.bulletAnchor == null
+          ? null
+          : markerLayout!.bulletAnchor! +
+              math.max<double>(0, lineSpacing.left - markerLayout.width);
       final editableTextLine = EditableTextLine(
           line,
           _buildLeading(
@@ -188,6 +229,10 @@ class EditableTextBlock extends StatelessWidget {
             indentLevelCounts: indentLevelCounts,
             count: count,
             markerStyle: markerStyle,
+            markerWidth: markerLayout?.width,
+            markerPadding: markerLayout?.padding,
+            markerAnchor: markerAnchor,
+            resolvedIndex: markerLayout?.resolvedIndices[index - 1],
           ),
           TextLine(
             line: line,
@@ -204,14 +249,7 @@ class EditableTextBlock extends StatelessWidget {
             customRecognizerBuilder: customRecognizerBuilder,
             composingRange: composingRange,
           ),
-          _listIndentSpacing(
-            context: context,
-            line: line,
-            count: count,
-            markerStyle: markerStyle,
-            indentWidthBuilder: indentWidthBuilder,
-            numberPointWidthBuilder: numberPointWidthBuilder,
-          ),
+          lineSpacing,
           _getSpacingForLine(line, index, count, defaultStyles),
           textDirection,
           textSelection,
@@ -233,6 +271,84 @@ class EditableTextBlock extends StatelessWidget {
     return children.toList(growable: false);
   }
 
+  _ListMarkerLayout? _resolveListMarkerLayout({
+    required BuildContext context,
+    required List<Line> lines,
+    required List<TextStyle?> markerStyles,
+    required Map<int, int> indentLevelCounts,
+    required LeadingBlockNumberPointWidth numberPointWidthBuilder,
+  }) {
+    final listAttribute = block.style.attributes[Attribute.list.key];
+    final isOrdered = listAttribute == Attribute.ol;
+    final isUnordered = listAttribute == Attribute.ul;
+    if (!isOrdered && !isUnordered) return null;
+
+    final defaultStyles = QuillStyles.getStyles(context, false)!;
+    final baseStyle = _markerTypography(
+      (defaultStyles.paragraph?.style ?? const TextStyle(fontSize: 16)).merge(
+        defaultStyles.lists?.style,
+      ),
+    );
+    final baseFontSize = baseStyle.fontSize ?? 16;
+    final count = lines.length;
+    final resolvedIndices = List<String?>.filled(count, null);
+    var configuredWidth = 0.0;
+    var padding = 0.0;
+    var widestText = 0.0;
+
+    for (var index = 0; index < count; index++) {
+      final line = lines[index];
+      final markerStyle = markerStyles[index]!;
+      final fontSize = markerStyle.fontSize ?? baseFontSize;
+      configuredWidth = math.max(
+        configuredWidth,
+        numberPointWidthBuilder(fontSize, isOrdered ? count : 1),
+      );
+      padding = math.max(padding, fontSize / 2);
+
+      final markerText = isOrdered
+          ? '${LeadingConfig.resolveIndexNumberByIndent(
+              index: index + 1,
+              attrs: line.style.attributes,
+              indentLevelCounts: indentLevelCounts,
+            )}.'
+          : '•';
+      if (isOrdered) {
+        resolvedIndices[index] = markerText.substring(0, markerText.length - 1);
+      }
+      widestText = math.max(
+        widestText,
+        TextBlockUtils.measureMarkerTextWidth(
+          context,
+          markerText,
+          markerStyle,
+          getDirectionOfNode(line, textDirection),
+        ),
+      );
+    }
+
+    if (isOrdered) {
+      return _ListMarkerLayout(
+        width: math.max(configuredWidth, widestText + padding),
+        padding: padding,
+        indentSize: baseFontSize,
+        resolvedIndices: resolvedIndices,
+      );
+    }
+
+    final anchor = math.max(baseFontSize, widestText / 2);
+    return _ListMarkerLayout(
+      width: math.max(
+        configuredWidth,
+        anchor + widestText / 2 + padding,
+      ),
+      padding: padding,
+      indentSize: baseFontSize,
+      resolvedIndices: resolvedIndices,
+      bulletAnchor: anchor,
+    );
+  }
+
   Widget? _buildLeading({
     required BuildContext context,
     required Line line,
@@ -240,6 +356,10 @@ class EditableTextBlock extends StatelessWidget {
     required Map<int, int> indentLevelCounts,
     required int count,
     required TextStyle? markerStyle,
+    required double? markerWidth,
+    required double? markerPadding,
+    required double? markerAnchor,
+    required String? resolvedIndex,
   }) {
     final defaultStyles = QuillStyles.getStyles(context, false)!;
     final fontSize = defaultStyles.paragraph?.style.fontSize ?? 16;
@@ -265,6 +385,7 @@ class EditableTextBlock extends StatelessWidget {
       attrs: attrs,
       indentLevelCounts: indentLevelCounts,
       index: isOrdered || isCodeBlock ? index : null,
+      resolvedIndex: isOrdered ? resolvedIndex : null,
       count: count,
       enabled: !isCheck ? null : !(checkBoxReadOnly ?? readOnly),
       style: () {
@@ -282,6 +403,9 @@ class EditableTextBlock extends StatelessWidget {
         );
       }(),
       width: () {
+        if ((isOrdered || isUnordered) && markerWidth != null) {
+          return markerWidth;
+        }
         if (isOrdered || isCodeBlock) {
           return numberPointWidthBuilder(
               markerStyle?.fontSize ?? fontSize, count);
@@ -295,6 +419,9 @@ class EditableTextBlock extends StatelessWidget {
         return null;
       }(),
       padding: () {
+        if ((isOrdered || isUnordered) && markerPadding != null) {
+          return markerPadding;
+        }
         if (isOrdered || isUnordered) {
           return (markerStyle?.fontSize ?? fontSize) / 2;
         }
@@ -303,6 +430,7 @@ class EditableTextBlock extends StatelessWidget {
         }
         return null;
       }(),
+      anchor: isUnordered ? markerAnchor : null,
       lineSize: isCheck ? fontSize : null,
       uiBuilder: isCheck ? defaultStyles.lists?.checkboxUIBuilder : null,
       value: attribute == Attribute.checked,
@@ -461,6 +589,8 @@ class EditableTextBlock extends StatelessWidget {
     required Line line,
     required int count,
     required TextStyle? markerStyle,
+    required double? markerWidth,
+    required double? indentSize,
     required LeadingBlockIndentWidth indentWidthBuilder,
     required LeadingBlockNumberPointWidth numberPointWidthBuilder,
   }) {
@@ -476,23 +606,27 @@ class EditableTextBlock extends StatelessWidget {
     final fontSize = markerStyle.fontSize ?? 16;
     final attrs = line.style.attributes;
     final listAttribute = attrs[Attribute.list.key];
-    final markerWidth = numberPointWidthBuilder(
-      fontSize,
-      listAttribute == Attribute.ol ? count : 1,
-    );
+    final effectiveMarkerWidth = markerWidth ??
+        numberPointWidthBuilder(
+          fontSize,
+          listAttribute == Attribute.ol ? count : 1,
+        );
     if (indentWidthBuilder != TextBlockUtils.defaultIndentWidthBuilder) {
       final customSpacing = indentWidthBuilder(
         block,
         context,
         count,
-        numberPointWidthBuilder,
+        (_, __) => effectiveMarkerWidth,
       );
       return customSpacing.copyWith(
-        left: math.max(customSpacing.left, markerWidth),
+        left: math.max(customSpacing.left, effectiveMarkerWidth),
       );
     }
     final indent = attrs[Attribute.indent.key]?.value as int? ?? 0;
-    return HorizontalSpacing(markerWidth + fontSize * indent, 0);
+    return HorizontalSpacing(
+      effectiveMarkerWidth + (indentSize ?? fontSize) * indent,
+      0,
+    );
   }
 
   VerticalSpacing _getSpacingForLine(

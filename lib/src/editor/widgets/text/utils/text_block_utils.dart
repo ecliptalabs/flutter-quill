@@ -41,6 +41,23 @@ TextSpan defaultSpanBuilder(
     );
 
 abstract final class TextBlockUtils {
+  static double measureMarkerTextWidth(
+    BuildContext context,
+    String text,
+    TextStyle style,
+    TextDirection textDirection,
+  ) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: textDirection,
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    final width = painter.width.ceilToDouble();
+    painter.dispose();
+    return width;
+  }
+
   /// Get the horizontalSpacing using the default
   /// implementation provided by [Flutter Quill]
   static HorizontalSpacing defaultIndentWidthBuilder(

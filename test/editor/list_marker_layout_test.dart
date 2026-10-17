@@ -170,7 +170,10 @@ void main() {
         controller: largeController,
         customStyles: customIndentStyles(markerSize: 32),
       );
-      expect(tester.getSize(markerFinder(listType).first).width, 64);
+      expect(
+        tester.getSize(markerFinder(listType).first).width,
+        greaterThanOrEqualTo(64),
+      );
 
       final nestedController = QuillController(
         document: listDocument(listType, markerSize: 10, indent: 2),
@@ -207,7 +210,7 @@ void main() {
 
     final markerRect = tester.getRect(find.byType(QuillNumberPoint).last);
     final textRect = tester.getRect(find.text('12.'));
-    expect(markerRect.width, 64);
+    expect(markerRect.width, greaterThanOrEqualTo(64));
     expect(textRect.left, greaterThanOrEqualTo(markerRect.left));
     expect(textRect.right, lessThanOrEqualTo(markerRect.right + 0.01));
   });

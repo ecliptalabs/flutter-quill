@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/rendering.dart';
@@ -143,6 +144,8 @@ class RichTextProxy extends SingleChildRenderObjectWidget {
     required this.locale,
     required this.strutStyle,
     required this.textScaler,
+    this.minimumHeight,
+    this.caretVerticalOffset = 0,
     this.textWidthBasis = TextWidthBasis.parent,
     this.textHeightBehavior,
     super.key,
@@ -154,13 +157,25 @@ class RichTextProxy extends SingleChildRenderObjectWidget {
   final TextScaler textScaler;
   final Locale locale;
   final StrutStyle strutStyle;
+  final double? minimumHeight;
+  final double caretVerticalOffset;
   final TextWidthBasis textWidthBasis;
   final TextHeightBehavior? textHeightBehavior;
 
   @override
   RenderParagraphProxy createRenderObject(BuildContext context) {
-    return RenderParagraphProxy(null, textStyle, textAlign, textDirection,
-        textScaler, strutStyle, locale, textWidthBasis, textHeightBehavior);
+    return RenderParagraphProxy(
+        null,
+        textStyle,
+        textAlign,
+        textDirection,
+        textScaler,
+        strutStyle,
+        locale,
+        textWidthBasis,
+        textHeightBehavior,
+        minimumHeight,
+        caretVerticalOffset);
   }
 
   @override
@@ -174,7 +189,9 @@ class RichTextProxy extends SingleChildRenderObjectWidget {
       ..locale = locale
       ..strutStyle = strutStyle
       ..textWidthBasis = textWidthBasis
-      ..textHeightBehavior = textHeightBehavior;
+      ..textHeightBehavior = textHeightBehavior
+      ..minimumHeight = minimumHeight
+      ..caretVerticalOffset = caretVerticalOffset;
   }
 }
 
@@ -190,6 +207,8 @@ class RenderParagraphProxy extends RenderProxyBox
     Locale locale,
     TextWidthBasis textWidthBasis,
     TextHeightBehavior? textHeightBehavior,
+    double? minimumHeight,
+    double caretVerticalOffset,
   ) : _prototypePainter = TextPainter(
           text: TextSpan(text: ' ', style: textStyle),
           textAlign: textAlign,
@@ -199,7 +218,9 @@ class RenderParagraphProxy extends RenderProxyBox
           locale: locale,
           textWidthBasis: textWidthBasis,
           textHeightBehavior: textHeightBehavior,
-        );
+        ),
+        _minimumHeight = minimumHeight,
+        _caretVerticalOffset = caretVerticalOffset;
 
   final TextPainter _prototypePainter;
 
@@ -267,6 +288,26 @@ class RenderParagraphProxy extends RenderProxyBox
     markNeedsLayout();
   }
 
+  double? _minimumHeight;
+
+  set minimumHeight(double? value) {
+    if (_minimumHeight == value) {
+      return;
+    }
+    _minimumHeight = value;
+    markNeedsLayout();
+  }
+
+  double _caretVerticalOffset;
+
+  set caretVerticalOffset(double value) {
+    if (_caretVerticalOffset == value) {
+      return;
+    }
+    _caretVerticalOffset = value;
+    markNeedsPaint();
+  }
+
   @override
   RenderParagraph? get child => super.child as RenderParagraph?;
 
@@ -275,7 +316,8 @@ class RenderParagraphProxy extends RenderProxyBox
 
   @override
   Offset getOffsetForCaret(TextPosition position, Rect caretPrototype) =>
-      child!.getOffsetForCaret(position, caretPrototype);
+      child!.getOffsetForCaret(position, caretPrototype) +
+      Offset(0, _caretVerticalOffset);
 
   @override
   TextPosition getPositionForOffset(Offset offset) =>
@@ -298,6 +340,11 @@ class RenderParagraphProxy extends RenderProxyBox
     super.performLayout();
     _prototypePainter.layout(
         minWidth: constraints.minWidth, maxWidth: constraints.maxWidth);
+    final minimumHeight = _minimumHeight;
+    if (minimumHeight != null) {
+      size = constraints.constrain(
+          Size(size.width, math.max(size.height, minimumHeight)));
+    }
   }
 
   @override

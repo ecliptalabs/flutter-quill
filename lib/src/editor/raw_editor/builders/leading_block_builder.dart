@@ -25,6 +25,8 @@ class LeadingConfig {
     required this.attrs,
     this.withDot = true,
     this.index,
+    this.resolvedIndex,
+    this.anchor,
     this.lineSize,
     this.enabled,
     this.uiBuilder,
@@ -36,10 +38,12 @@ class LeadingConfig {
   final Map<int, int> indentLevelCounts;
   // if is a list that contains a number as its leading then this is non null
   final int? index;
+  final String? resolvedIndex;
   final int count;
   final TextStyle? style;
   final double? width;
   final double? padding;
+  final double? anchor;
 
   // these values are used if the leading is from a check list
   final QuillCheckboxBuilder? uiBuilder;
@@ -48,7 +52,22 @@ class LeadingConfig {
   final bool value;
   final void Function(bool) onCheckboxTap;
 
+  String? _computedIndex;
+
   String? get getIndexNumberByIndent {
+    if (resolvedIndex != null) return resolvedIndex;
+    return _computedIndex ??= resolveIndexNumberByIndent(
+      index: index,
+      attrs: attrs,
+      indentLevelCounts: indentLevelCounts,
+    );
+  }
+
+  static String? resolveIndexNumberByIndent({
+    required int? index,
+    required Map<String, Attribute> attrs,
+    required Map<int, int> indentLevelCounts,
+  }) {
     if (index == null) return null;
     var s = index.toString();
     var level = 0;
@@ -82,7 +101,7 @@ class LeadingConfig {
     return s;
   }
 
-  String _toExcelSheetColumnTitle(int n) {
+  static String _toExcelSheetColumnTitle(int n) {
     final result = StringBuffer();
     while (n > 0) {
       n--;
@@ -93,7 +112,7 @@ class LeadingConfig {
     return result.toString().split('').reversed.join();
   }
 
-  String _intToRoman(int input) {
+  static String _intToRoman(int input) {
     var num = input;
 
     if (num < 0) {

@@ -6,4 +6,5 @@ Widget bulletPointLeading(LeadingConfig config) => QuillBulletPoint(
       style: config.style!,
       width: config.width!,
       padding: config.padding!,
+      anchor: config.anchor,
     );

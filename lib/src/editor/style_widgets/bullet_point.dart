@@ -5,6 +5,7 @@ class QuillBulletPoint extends StatelessWidget {
     required this.style,
     required this.width,
     this.padding = 0,
+    this.anchor,
     this.backgroundColor,
     this.textAlign,
     super.key,
@@ -13,11 +14,30 @@ class QuillBulletPoint extends StatelessWidget {
   final TextStyle style;
   final double width;
   final double padding;
+  final double? anchor;
   final Color? backgroundColor;
   final TextAlign? textAlign;
 
   @override
   Widget build(BuildContext context) {
+    final anchor = this.anchor;
+    if (anchor != null) {
+      return Container(
+        alignment: AlignmentDirectional.topStart,
+        width: width,
+        color: backgroundColor,
+        child: SizedBox(
+          width: anchor * 2,
+          child: Text(
+            '•',
+            style: style,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            softWrap: false,
+          ),
+        ),
+      );
+    }
     return Container(
       alignment: AlignmentDirectional.topEnd,
       width: width,
@@ -27,6 +47,8 @@ class QuillBulletPoint extends StatelessWidget {
         '•',
         style: style,
         textAlign: textAlign,
+        maxLines: 1,
+        softWrap: false,
       ),
     );
   }

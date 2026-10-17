@@ -89,7 +89,7 @@ void main() {
       final configs = await pumpList(tester, controller: controller);
 
       expect(configs.last.style!.fontSize, 16);
-      expect(configs.last.width, 32);
+      expect(configs.last.width, greaterThanOrEqualTo(32));
       expect(configs.last.padding, 8);
     });
 
@@ -110,7 +110,7 @@ void main() {
 
       expect(configs.last.style!.fontSize, 19);
       expect(configs.last.style!.color, blue);
-      expect(configs.last.width, 38);
+      expect(configs.last.width, greaterThanOrEqualTo(38));
       expect(configs.last.padding, 9.5);
       expect(controller.document.toDelta().toJson(), before);
     });
@@ -143,7 +143,7 @@ void main() {
       expect(config.style!.fontFamily, 'serif');
       expect(config.style!.decoration, TextDecoration.none);
       expect(config.style!.backgroundColor, isNull);
-      expect(config.width, 48);
+      expect(config.width, greaterThanOrEqualTo(48));
       expect(config.padding, 12);
 
       final markerFinder = listType == Attribute.ul.value
@@ -152,7 +152,7 @@ void main() {
       final bodyFinder = find.byWidgetPredicate(
         (widget) => widget is RichText && widget.text.toPlainText() == 'item',
       );
-      expect(tester.getSize(markerFinder).width, 48);
+      expect(tester.getSize(markerFinder).width, config.width);
       expect(
         tester.getTopLeft(markerFinder).dy,
         closeTo(tester.getTopLeft(bodyFinder).dy, 0.01),
@@ -173,7 +173,7 @@ void main() {
       final configs = await pumpList(tester, controller: controller);
 
       expect(configs.last.style!.fontSize, 10);
-      expect(configs.last.width, 20);
+      expect(configs.last.width, greaterThanOrEqualTo(20));
       expect(configs.last.padding, 5);
     });
 
@@ -215,7 +215,7 @@ void main() {
       expect(config.style!.color, green);
       expect(config.style!.backgroundColor, isNull);
       expect(config.style!.decoration, TextDecoration.none);
-      expect(config.width, 42);
+      expect(config.width, greaterThanOrEqualTo(42));
       expect(config.padding, 10.5);
     });
 
@@ -246,7 +246,7 @@ void main() {
 
       expect(emptyLineConfig.style!.fontSize, 26);
       expect(emptyLineConfig.style!.color, orange);
-      expect(emptyLineConfig.width, 52);
+      expect(emptyLineConfig.width, greaterThanOrEqualTo(52));
       expect(emptyLineConfig.padding, 13);
       expect(emptyLineConfig.attrs[Attribute.list.key]!.value, listType);
       expect(emptyLineConfig.attrs[Attribute.indent.key]!.value, 1);

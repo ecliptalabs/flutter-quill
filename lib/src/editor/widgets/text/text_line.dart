@@ -170,9 +170,14 @@ class _TextLineState extends State<TextLine> {
       }
     }
     final textSpan = _getTextSpanForWholeLine();
-    final strutStyle =
-        StrutStyle.fromTextStyle(textSpan.style ?? const TextStyle());
+    final lineTextStyle = textSpan.style ?? const TextStyle();
+    final strutStyle = StrutStyle.fromTextStyle(lineTextStyle);
     final textAlign = _getTextAlign();
+    final caretGeometry = _getEmptyLineCaretGeometry(
+      lineTextStyle,
+      strutStyle,
+      textAlign,
+    );
     final child = RichText(
       key: _richTextKey,
       text: textSpan,
@@ -182,12 +187,14 @@ class _TextLineState extends State<TextLine> {
       textScaler: MediaQuery.textScalerOf(context),
     );
     return RichTextProxy(
-      textStyle: textSpan.style ?? const TextStyle(),
+      textStyle: lineTextStyle,
       textAlign: textAlign,
       textDirection: widget.textDirection!,
       strutStyle: strutStyle,
       locale: Localizations.localeOf(context),
       textScaler: MediaQuery.textScalerOf(context),
+      minimumHeight: caretGeometry.minimumHeight,
+      caretVerticalOffset: caretGeometry.verticalOffset,
       child: child,
     );
   }
@@ -447,6 +454,56 @@ class _TextLineState extends State<TextLine> {
     }
 
     return textStyle;
+  }
+
+  ({double? minimumHeight, double verticalOffset})
+      _getEmptyLineCaretGeometry(
+    TextStyle lineStyle,
+    StrutStyle strutStyle,
+    TextAlign textAlign,
+  ) {
+    final selection = widget.controller.selection;
+    if (widget.line.isNotEmpty ||
+        !selection.isCollapsed ||
+        selection.extentOffset != widget.line.documentOffset ||
+        isPlaceholderLine) {
+      return (minimumHeight: null, verticalOffset: 0);
+    }
+
+    final insertionStyle = widget.controller.document
+        .collectStyle(selection.extentOffset, 0)
+        .mergeAll(widget.controller.toggledStyle);
+    // This geometry is render-only. A uniquely toggled style on an empty line
+    // remains ephemeral and may be lost after the selection moves away.
+    final caretStyle = lineStyle.merge(_getInlineTextStyle(
+      insertionStyle,
+      widget.styles,
+      widget.line.style,
+      false,
+    ));
+    final textScaler = MediaQuery.textScalerOf(context);
+    final locale = Localizations.localeOf(context);
+    TextPainter painter(TextStyle style) => TextPainter(
+          text: TextSpan(text: ' ', style: style),
+          textAlign: textAlign,
+          textDirection: widget.textDirection,
+          textScaler: textScaler,
+          strutStyle: strutStyle,
+          locale: locale,
+          maxLines: 1,
+        )..layout();
+
+    final linePainter = painter(lineStyle);
+    final caretPainter = painter(caretStyle);
+    final verticalOffset = caretPainter.computeLineMetrics().single.baseline -
+        linePainter.computeLineMetrics().single.baseline;
+    final minimumHeight = caretPainter.preferredLineHeight;
+    linePainter.dispose();
+    caretPainter.dispose();
+    return (
+      minimumHeight: minimumHeight,
+      verticalOffset: verticalOffset,
+    );
   }
 
   TextStyle _applyCustomAttributes(
