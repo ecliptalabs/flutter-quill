@@ -287,6 +287,9 @@ class QuillController extends ChangeNotifier {
       return;
     }
 
+    final pendingNewLineStyle = keepStyleOnNewLine && data == '\n'
+        ? _pendingInlineStyleForNewLine()
+        : const Style();
     Delta? delta;
     Style? style;
     if (len > 0 || data is! String || data.isNotEmpty) {
@@ -333,7 +336,8 @@ class QuillController extends ChangeNotifier {
               baseOffset: textSelection.baseOffset + positionDelta,
               extentOffset: textSelection.extentOffset + positionDelta,
             ),
-            insertNewline: data == '\n');
+            insertNewline: data == '\n',
+            pendingNewLineStyle: pendingNewLineStyle);
       }
     }
 
@@ -470,8 +474,18 @@ class QuillController extends ChangeNotifier {
     super.dispose();
   }
 
+  Style _pendingInlineStyleForNewLine() {
+    return Style.attr(Map<String, Attribute>.fromEntries(
+      toggledStyle.attributes.entries.where(
+        (entry) => Attribute.inlineKeys.contains(entry.key) &&
+            entry.key != Attribute.link.key,
+      ),
+    ));
+  }
+
   void _updateSelection(TextSelection textSelection,
-      {bool insertNewline = false}) {
+      {bool insertNewline = false,
+      Style pendingNewLineStyle = const Style()}) {
     _selection = textSelection;
     final end = document.length - 1;
     _selection = selection.copyWith(
@@ -483,7 +497,9 @@ class QuillController extends ChangeNotifier {
         final ignoredStyles = style.attributes.values.where(
           (s) => !s.isInline || s.key == Attribute.link.key,
         );
-        toggledStyle = style.removeAll(ignoredStyles.toSet());
+        toggledStyle = style
+            .removeAll(ignoredStyles.toSet())
+            .mergeAll(pendingNewLineStyle);
       } else {
         toggledStyle = const Style();
       }

@@ -252,6 +252,193 @@ void main() {
       expect(emptyLineConfig.attrs[Attribute.indent.key]!.value, 1);
       expect(controller.document.toDelta().toJson(), before);
     });
+
+    testWidgets('$label empty inactive marker inherits preceding typography', (
+      tester,
+    ) async {
+      final controller = QuillController(
+        document: listDocument(
+          listType,
+          inlineAttributes: const <String, dynamic>{
+            'size': '24',
+            'color': '#c62828',
+            'bold': true,
+            'font': 'serif',
+          },
+          includeEmptyLine: true,
+        ),
+        selection: const TextSelection.collapsed(offset: 0),
+      );
+      final before = controller.document.toDelta().toJson();
+
+      final configs = await pumpList(tester, controller: controller);
+      final emptyLineConfig = configs.last;
+
+      expect(emptyLineConfig.style!.fontSize, 24);
+      expect(emptyLineConfig.style!.color, red);
+      expect(emptyLineConfig.style!.fontWeight, FontWeight.bold);
+      expect(emptyLineConfig.style!.fontFamily, 'serif');
+      expect(controller.document.toDelta().toJson(), before);
+    });
+
+    testWidgets('$label backspace-to-empty marker inherits preceding style', (
+      tester,
+    ) async {
+      final document = Document.fromDelta(Delta()
+        ..insert('item', {
+          'size': '24',
+          'color': '#c62828',
+          'font': 'serif',
+        })
+        ..insert('\n', {'list': listType})
+        ..insert('next', {
+          'size': '18',
+          'color': '#2457c5',
+        })
+        ..insert('\n', {'list': listType}));
+      final controller = QuillController(
+        document: document,
+        selection: const TextSelection.collapsed(offset: 9),
+      )..replaceText(5, 4, '', const TextSelection.collapsed(offset: 5));
+      final beforeRender = controller.document.toDelta().toJson();
+
+      final configs = await pumpList(tester, controller: controller);
+      final emptyLineConfig = configs.last;
+
+      expect(emptyLineConfig.style!.fontSize, 24);
+      expect(emptyLineConfig.style!.color, red);
+      expect(emptyLineConfig.style!.fontFamily, 'serif');
+      expect(controller.document.toDelta().toJson(), beforeRender);
+    });
+
+    testWidgets('$label blank Enter continuation keeps inherited markers', (
+      tester,
+    ) async {
+      final controller = QuillController(
+        document: Document.fromDelta(Delta()
+          ..insert('item', {
+            'size': '24',
+            'color': '#c62828',
+            'bold': true,
+          })
+          ..insert('\n\n', {'list': listType})
+          ..insert('tail')
+          ..insert('\n', {'list': listType})),
+        selection: const TextSelection.collapsed(offset: 5),
+      )
+        ..replaceText(5, 0, '\n', const TextSelection.collapsed(offset: 6))
+        ..updateSelection(
+            const TextSelection.collapsed(offset: 0), ChangeSource.local);
+      final beforeRender = controller.document.toDelta().toJson();
+
+      final configs = await pumpList(tester, controller: controller);
+      final renderedConfigs = configs.sublist(configs.length - 4);
+
+      for (final emptyLineConfig in renderedConfigs.sublist(1, 3)) {
+        expect(emptyLineConfig.style!.fontSize, 24);
+        expect(emptyLineConfig.style!.color, red);
+        expect(emptyLineConfig.style!.fontWeight, FontWeight.bold);
+      }
+      expect(controller.document.toDelta().toJson(), beforeRender);
+    });
+
+    testWidgets('$label inherited customStyleBuilder typography wins', (
+      tester,
+    ) async {
+      final controller = QuillController(
+        document: listDocument(
+          listType,
+          inlineAttributes: const <String, dynamic>{'size': '18'},
+          includeEmptyLine: true,
+        ),
+        selection: const TextSelection.collapsed(offset: 0),
+      );
+      final before = controller.document.toDelta().toJson();
+
+      final configs = await pumpList(
+        tester,
+        controller: controller,
+        customStyleBuilder: (attribute) =>
+            attribute.key == Attribute.size.key
+                ? const TextStyle(
+                    fontSize: 29,
+                    color: green,
+                    fontFamily: 'monospace',
+                  )
+                : const TextStyle(),
+      );
+      final emptyLineConfig = configs.last;
+
+      expect(emptyLineConfig.style!.fontSize, 29);
+      expect(emptyLineConfig.style!.color, green);
+      expect(emptyLineConfig.style!.fontFamily, 'monospace');
+      expect(controller.document.toDelta().toJson(), before);
+    });
+
+    testWidgets('$label combined styled empty-list continuation stays stable', (
+      tester,
+    ) async {
+      final controller = QuillController(
+        document: Document.fromDelta(Delta()
+          ..insert('item', {
+            'size': '32',
+            'color': '#c62828',
+            'bold': true,
+          })
+          ..insert('\n', {'list': listType})
+          ..insert('tail')
+          ..insert('\n', {'list': listType})),
+        selection: const TextSelection.collapsed(offset: 4),
+      )..forceToggledStyle(const Style.attr({
+          'size': SizeAttribute('32'),
+          'color': ColorAttribute('#c62828'),
+          'bold': Attribute.bold,
+        }))
+        ..replaceText(
+            4, 0, '\n', const TextSelection.collapsed(offset: 5));
+      final configs = await pumpList(tester, controller: controller);
+      var current = configs.sublist(configs.length - 3);
+      expect(current[1].style!.fontSize, 32);
+      expect(current[1].style!.color, red);
+
+      controller.replaceText(
+          5, 0, '\n', const TextSelection.collapsed(offset: 6));
+      await tester.pump();
+      current = configs.sublist(configs.length - 4);
+      for (final emptyLineConfig in current.sublist(1, 3)) {
+        expect(emptyLineConfig.style!.fontSize, 32);
+        expect(emptyLineConfig.style!.color, red);
+      }
+
+      controller.updateSelection(
+          const TextSelection.collapsed(offset: 7), ChangeSource.local);
+      await tester.pump();
+      current = configs.sublist(configs.length - 4);
+      for (final emptyLineConfig in current.sublist(1, 3)) {
+        expect(emptyLineConfig.style!.fontSize, 32);
+        expect(emptyLineConfig.style!.color, red);
+      }
+
+      controller
+        ..replaceText(6, 0, 'x', const TextSelection.collapsed(offset: 7))
+        ..replaceText(6, 1, '', const TextSelection.collapsed(offset: 6));
+      await tester.pump(const Duration(seconds: 1));
+      current = configs.sublist(configs.length - 4);
+      expect(current[2].style!.fontSize, 32);
+      expect(current[2].style!.color, red);
+      expect(controller.document.toDelta().toJson(), [
+        {
+          'insert': 'item',
+          'attributes': {'bold': true, 'size': '32', 'color': '#c62828'}
+        },
+        {'insert': '\n\n\n', 'attributes': {'list': listType}},
+        {'insert': 'tail'},
+        {
+          'insert': '\n',
+          'attributes': {'list': listType}
+        }
+      ]);
+    });
   }
 
   testWidgets('checkbox leading remains on its existing rendering path', (

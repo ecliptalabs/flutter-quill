@@ -256,6 +256,172 @@ void main() {
           everyElement(const Style()));
     });
 
+    test('pending inline style survives Enter without changing Delta style', () {
+      controller = QuillController(
+        document: Document.fromDelta(Delta()..insert('item\n')),
+        selection: const TextSelection.collapsed(offset: 4),
+      )..forceToggledStyle(const Style.attr({
+          'size': SizeAttribute('24'),
+          'color': ColorAttribute('#16833b'),
+          'bold': Attribute.bold,
+        }))
+        ..replaceText(
+            4, 0, '\n', const TextSelection.collapsed(offset: 5));
+
+      expect(controller.toggledStyle.attributes[Attribute.size.key],
+          const SizeAttribute('24'));
+      expect(controller.toggledStyle.attributes[Attribute.color.key],
+          const ColorAttribute('#16833b'));
+      expect(controller.toggledStyle.attributes[Attribute.bold.key],
+          Attribute.bold);
+      expect(controller.document.toDelta().toJson(), [
+        {'insert': 'item\n\n'}
+      ]);
+    });
+
+    for (final listAttribute in <Attribute>[Attribute.ul, Attribute.ol]) {
+      test('pending inline style survives Enter in ${listAttribute.value} list',
+          () {
+        controller = QuillController(
+          document: Document.fromDelta(Delta()
+            ..insert('item')
+            ..insert('\n', {'list': listAttribute.value})),
+          selection: const TextSelection.collapsed(offset: 4),
+        )..forceToggledStyle(const Style.attr({
+            'font': FontAttribute('serif'),
+            'size': SizeAttribute('24'),
+            'color': ColorAttribute('#16833b'),
+            'bold': Attribute.bold,
+          }))
+          ..replaceText(
+              4, 0, '\n', const TextSelection.collapsed(offset: 5));
+
+        expect(controller.toggledStyle.attributes[Attribute.font.key],
+            const FontAttribute('serif'));
+        expect(controller.toggledStyle.attributes[Attribute.size.key],
+            const SizeAttribute('24'));
+        expect(controller.toggledStyle.attributes[Attribute.color.key],
+            const ColorAttribute('#16833b'));
+        expect(controller.toggledStyle.attributes[Attribute.bold.key],
+            Attribute.bold);
+        expect(controller.document.toDelta().toJson(), [
+          {'insert': 'item'},
+          {
+            'insert': '\n\n',
+            'attributes': {'list': listAttribute.value}
+          }
+        ]);
+      });
+    }
+
+    test('Enter without pending style keeps preceding-character inheritance',
+        () {
+      controller = QuillController(
+        document: Document.fromDelta(Delta()
+          ..insert('item', {
+            'size': '18',
+            'color': '#16833b',
+            'italic': true,
+          })
+          ..insert('\n')),
+        selection: const TextSelection.collapsed(offset: 4),
+      )..replaceText(
+          4, 0, '\n', const TextSelection.collapsed(offset: 5));
+
+      expect(controller.toggledStyle.attributes[Attribute.size.key],
+          const SizeAttribute('18'));
+      expect(controller.toggledStyle.attributes[Attribute.color.key],
+          const ColorAttribute('#16833b'));
+      expect(controller.toggledStyle.attributes[Attribute.italic.key],
+          Attribute.italic);
+    });
+
+    test('pending link and block attributes do not carry across Enter', () {
+      controller = QuillController(
+        document: Document.fromDelta(Delta()
+          ..insert('item', {
+            'italic': true,
+            'link': 'https://example.invalid',
+          })
+          ..insert('\n', {'list': Attribute.ul.value})),
+        selection: const TextSelection.collapsed(offset: 4),
+      )..forceToggledStyle(Style.attr({
+          'bold': Attribute.bold,
+          'link': const LinkAttribute('https://example.invalid'),
+          'header': Attribute.h1,
+          'script': Attribute.superscript,
+        }))
+        ..replaceText(
+            4, 0, '\n', const TextSelection.collapsed(offset: 5));
+
+      expect(controller.toggledStyle.attributes[Attribute.bold.key],
+          Attribute.bold);
+      expect(controller.toggledStyle.attributes[Attribute.italic.key],
+          Attribute.italic);
+      expect(controller.toggledStyle.attributes[Attribute.script.key],
+          Attribute.superscript);
+      expect(controller.toggledStyle.containsKey(Attribute.link.key), isFalse);
+      expect(
+          controller.toggledStyle.containsKey(Attribute.header.key), isFalse);
+      expect(controller.document.collectStyle(5, 0)
+          .attributes[Attribute.list.key], Attribute.ul);
+    });
+
+    test('empty-list Enter still exits the list', () {
+      controller = QuillController(
+        document: Document.fromDelta(Delta()
+          ..insert('item')
+          ..insert('\n\n', {'list': Attribute.ul.value})),
+        selection: const TextSelection.collapsed(offset: 5),
+      )..forceToggledStyle(const Style.attr({
+          'size': SizeAttribute('24'),
+          'bold': Attribute.bold,
+        }))
+        ..replaceText(
+            5, 0, '\n', const TextSelection.collapsed(offset: 6));
+
+      expect(controller.document.toDelta().toJson(), [
+        {'insert': 'item'},
+        {
+          'insert': '\n',
+          'attributes': {'list': Attribute.ul.value}
+        },
+        {'insert': '\n'}
+      ]);
+      expect(controller.toggledStyle.attributes[Attribute.size.key],
+          const SizeAttribute('24'));
+      expect(controller.toggledStyle.attributes[Attribute.bold.key],
+          Attribute.bold);
+    });
+
+    test('type-first formatted Enter behavior remains inherited', () {
+      controller = QuillController(
+        document: Document.fromDelta(Delta()..insert('item\n')),
+        selection: const TextSelection.collapsed(offset: 4),
+      )..forceToggledStyle(const Style.attr({
+          'size': SizeAttribute('24'),
+          'bold': Attribute.bold,
+        }))
+        ..replaceText(
+            4, 0, 'x', const TextSelection.collapsed(offset: 5));
+      expect(controller.toggledStyle, const Style());
+      controller.replaceText(
+          5, 0, '\n', const TextSelection.collapsed(offset: 6));
+
+      expect(controller.toggledStyle.attributes[Attribute.size.key],
+          const SizeAttribute('24'));
+      expect(controller.toggledStyle.attributes[Attribute.bold.key],
+          Attribute.bold);
+      expect(controller.document.toDelta().toJson(), [
+        {'insert': 'item'},
+        {
+          'insert': 'x',
+          'attributes': {'size': '24', 'bold': true}
+        },
+        {'insert': '\n\n'}
+      ]);
+    });
+
     test('moveCursorToStart', () {
       var listenerCalled = false;
       controller

@@ -1248,12 +1248,13 @@ class RenderEditableTextLine extends RenderEditableBox {
     _resolvePadding();
     final horizontalPadding = _resolvedPadding!.left + _resolvedPadding!.right;
     final verticalPadding = _resolvedPadding!.top + _resolvedPadding!.bottom;
-    if (_body != null) {
-      return _body!
-              .getMinIntrinsicHeight(math.max(0, width - horizontalPadding)) +
-          verticalPadding;
-    }
-    return verticalPadding;
+    final innerWidth = math.max<double>(0, width - horizontalPadding);
+    final bodyHeight = _body?.getMinIntrinsicHeight(innerWidth) ?? 0;
+    final indentWidth = textDirection == TextDirection.ltr
+        ? _resolvedPadding!.left
+        : _resolvedPadding!.right;
+    final leadingHeight = _leading?.getMinIntrinsicHeight(indentWidth) ?? 0;
+    return math.max(bodyHeight, leadingHeight) + verticalPadding;
   }
 
   @override
@@ -1261,12 +1262,13 @@ class RenderEditableTextLine extends RenderEditableBox {
     _resolvePadding();
     final horizontalPadding = _resolvedPadding!.left + _resolvedPadding!.right;
     final verticalPadding = _resolvedPadding!.top + _resolvedPadding!.bottom;
-    if (_body != null) {
-      return _body!
-              .getMaxIntrinsicHeight(math.max(0, width - horizontalPadding)) +
-          verticalPadding;
-    }
-    return verticalPadding;
+    final innerWidth = math.max<double>(0, width - horizontalPadding);
+    final bodyHeight = _body?.getMaxIntrinsicHeight(innerWidth) ?? 0;
+    final indentWidth = textDirection == TextDirection.ltr
+        ? _resolvedPadding!.left
+        : _resolvedPadding!.right;
+    final leadingHeight = _leading?.getMaxIntrinsicHeight(indentWidth) ?? 0;
+    return math.max(bodyHeight, leadingHeight) + verticalPadding;
   }
 
   @override
@@ -1301,19 +1303,21 @@ class RenderEditableTextLine extends RenderEditableBox {
     (_body!.parentData as BoxParentData).offset =
         Offset(_resolvedPadding!.left, _resolvedPadding!.top);
 
+    var contentHeight = _body!.size.height;
     if (_leading != null) {
       final leadingConstraints = innerConstraints.copyWith(
           minWidth: indentWidth,
           maxWidth: indentWidth,
-          maxHeight: _body!.size.height);
+          minHeight: 0);
       _leading!.layout(leadingConstraints, parentUsesSize: true);
       (_leading!.parentData as BoxParentData).offset =
           Offset(0, _resolvedPadding!.top);
+      contentHeight = math.max(contentHeight, _leading!.size.height);
     }
 
     size = constraints.constrain(Size(
       _resolvedPadding!.left + _body!.size.width + _resolvedPadding!.right,
-      _resolvedPadding!.top + _body!.size.height + _resolvedPadding!.bottom,
+      _resolvedPadding!.top + contentHeight + _resolvedPadding!.bottom,
     ));
 
     _computeCaretPrototype();

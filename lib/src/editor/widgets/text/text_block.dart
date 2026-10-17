@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -358,12 +360,17 @@ class EditableTextBlock extends StatelessWidget {
         defaultStyles,
       ));
       customAttributes.addAll(firstRunStyle.values);
-    } else if (_isActiveEmptyLine(line)) {
+    } else {
+      var emptyLineStyle =
+          controller.document.collectStyle(line.documentOffset, 0);
+      if (_isActiveEmptyLine(line)) {
+        emptyLineStyle = emptyLineStyle.mergeAll(controller.toggledStyle);
+      }
       style = style.merge(_markerStyleForAttributes(
-        controller.toggledStyle,
+        emptyLineStyle,
         defaultStyles,
       ));
-      customAttributes.addAll(controller.toggledStyle.values);
+      customAttributes.addAll(emptyLineStyle.values);
     }
 
     final styleBuilder = customStyleBuilder;
@@ -457,8 +464,7 @@ class EditableTextBlock extends StatelessWidget {
     required LeadingBlockIndentWidth indentWidthBuilder,
     required LeadingBlockNumberPointWidth numberPointWidthBuilder,
   }) {
-    if (markerStyle == null ||
-        indentWidthBuilder != TextBlockUtils.defaultIndentWidthBuilder) {
+    if (markerStyle == null) {
       return indentWidthBuilder(
         block,
         context,
@@ -474,6 +480,17 @@ class EditableTextBlock extends StatelessWidget {
       fontSize,
       listAttribute == Attribute.ol ? count : 1,
     );
+    if (indentWidthBuilder != TextBlockUtils.defaultIndentWidthBuilder) {
+      final customSpacing = indentWidthBuilder(
+        block,
+        context,
+        count,
+        numberPointWidthBuilder,
+      );
+      return customSpacing.copyWith(
+        left: math.max(customSpacing.left, markerWidth),
+      );
+    }
     final indent = attrs[Attribute.indent.key]?.value as int? ?? 0;
     return HorizontalSpacing(markerWidth + fontSize * indent, 0);
   }
