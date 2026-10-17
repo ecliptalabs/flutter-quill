@@ -1003,6 +1003,9 @@ class QuillRawEditorState extends EditorState
   }
 
   void _didChangeTextEditingValue([bool ignoreFocus = false]) {
+    _shortcutActionsManager.adjacentLineAction
+        .stopCurrentVerticalRunIfSelectionChanges();
+
     if (kIsWeb) {
       _onChangeTextEditingValue(ignoreFocus);
       if (!ignoreFocus) {
@@ -1021,9 +1024,6 @@ class QuillRawEditorState extends EditorState
         _markNeedsBuild();
       }
     }
-
-    _shortcutActionsManager.adjacentLineAction
-        .stopCurrentVerticalRunIfSelectionChanges();
   }
 
   void _onChangeTextEditingValue([bool ignoreCaret = false]) {

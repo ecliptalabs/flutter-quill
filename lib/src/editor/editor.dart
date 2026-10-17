@@ -984,19 +984,21 @@ class RenderEditor extends RenderEditableContainerBox
 
     if (position.offset < _extendSelectionOrigin!.baseOffset) {
       _handleSelectionChange(
-        TextSelection(
+        DragTextSelection(
           baseOffset: position.offset,
           extentOffset: _extendSelectionOrigin!.extentOffset,
           affinity: selection.affinity,
+          first: true,
         ),
         cause,
       );
     } else if (position.offset > _extendSelectionOrigin!.extentOffset) {
       _handleSelectionChange(
-        TextSelection(
+        DragTextSelection(
           baseOffset: _extendSelectionOrigin!.baseOffset,
           extentOffset: position.offset,
           affinity: selection.affinity,
+          first: false,
         ),
         cause,
       );

@@ -46,6 +46,13 @@ void main() {
     return (endpoints.first.point.dy + endpoints.last.point.dy) / 2;
   }
 
+  Offset globalPointForPosition(int offset) {
+    final caret = renderEditor.getLocalRectForCaret(
+      TextPosition(offset: offset),
+    );
+    return renderEditor.localToGlobal(caret.center);
+  }
+
   testWidgets('forward selection reveals its active end extent', (
     tester,
   ) async {
@@ -126,5 +133,92 @@ void main() {
     );
     expect(lastOffset, isNotNull);
     expect(lastOffset, greaterThan(0));
+  });
+
+  testWidgets('downward pointer extension reveals its lower active endpoint', (
+    tester,
+  ) async {
+    await pumpEditor(tester);
+    const start = 1;
+    final end = controller.document.length - 3;
+
+    renderEditor
+      ..handleDragStart(
+        DragStartDetails(globalPosition: globalPointForPosition(start)),
+      )
+      ..extendSelection(
+        globalPointForPosition(end),
+        cause: SelectionChangedCause.drag,
+      );
+    await tester.pump();
+
+    expect(controller.selection, isA<DragTextSelection>());
+    expect((controller.selection as DragTextSelection).first, isFalse);
+    final offset = renderEditor.getOffsetToRevealCursor(
+      viewportBetweenSelectionEndpoints(controller.selection),
+      0,
+      0,
+    );
+    expect(offset, isNotNull);
+    expect(offset, greaterThan(0));
+    renderEditor.handleDragEnd(DragEndDetails());
+  });
+
+  testWidgets('upward pointer extension reveals its upper active endpoint', (
+    tester,
+  ) async {
+    await pumpEditor(tester);
+    final start = controller.document.length - 3;
+    const end = 1;
+
+    renderEditor
+      ..handleDragStart(
+        DragStartDetails(globalPosition: globalPointForPosition(start)),
+      )
+      ..extendSelection(
+        globalPointForPosition(end),
+        cause: SelectionChangedCause.drag,
+      );
+    await tester.pump();
+
+    expect(controller.selection, isA<DragTextSelection>());
+    expect((controller.selection as DragTextSelection).first, isTrue);
+    expect(
+      renderEditor.getOffsetToRevealCursor(
+        viewportBetweenSelectionEndpoints(controller.selection),
+        0,
+        0,
+      ),
+      0,
+    );
+    renderEditor.handleDragEnd(DragEndDetails());
+  });
+
+  testWidgets('pointer reversal updates which endpoint is active', (
+    tester,
+  ) async {
+    await pumpEditor(tester);
+    final start = controller.document.length ~/ 2;
+    final lower = controller.document.length - 3;
+    const upper = 1;
+
+    renderEditor
+      ..handleDragStart(
+        DragStartDetails(globalPosition: globalPointForPosition(start)),
+      )
+      ..extendSelection(
+        globalPointForPosition(lower),
+        cause: SelectionChangedCause.drag,
+      );
+    await tester.pump();
+    expect((controller.selection as DragTextSelection).first, isFalse);
+
+    renderEditor.extendSelection(
+      globalPointForPosition(upper),
+      cause: SelectionChangedCause.drag,
+    );
+    await tester.pump();
+    expect((controller.selection as DragTextSelection).first, isTrue);
+    renderEditor.handleDragEnd(DragEndDetails());
   });
 }

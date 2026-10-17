@@ -3,13 +3,14 @@ import 'package:flutter/rendering.dart';
 
 import '../../../common/structs/horizontal_spacing.dart';
 import '../../../common/structs/vertical_spacing.dart';
+import '../../../common/utils/color.dart';
 import '../../../common/utils/font.dart';
 import '../../../controller/quill_controller.dart';
 import '../../../delta/delta_diff.dart';
 import '../../../document/attribute.dart';
 import '../../../document/nodes/block.dart';
 import '../../../document/nodes/line.dart';
-import '../../../editor_toolbar_shared/color.dart';
+import '../../../document/style.dart';
 import '../../editor.dart';
 import '../../embed/embed_editor_builder.dart';
 import '../../raw_editor/builders/leading_block_builder.dart';
@@ -175,6 +176,7 @@ class EditableTextBlock extends StatelessWidget {
     var index = 0;
     for (final line in Iterable.castFrom<dynamic, Line>(block.children)) {
       index++;
+      final markerStyle = _listMarkerStyle(line, defaultStyles!);
       final editableTextLine = EditableTextLine(
           line,
           _buildLeading(
@@ -183,6 +185,7 @@ class EditableTextBlock extends StatelessWidget {
             index: index,
             indentLevelCounts: indentLevelCounts,
             count: count,
+            markerStyle: markerStyle,
           ),
           TextLine(
             line: line,
@@ -199,7 +202,14 @@ class EditableTextBlock extends StatelessWidget {
             customRecognizerBuilder: customRecognizerBuilder,
             composingRange: composingRange,
           ),
-          indentWidthBuilder(block, context, count, numberPointWidthBuilder),
+          _listIndentSpacing(
+            context: context,
+            line: line,
+            count: count,
+            markerStyle: markerStyle,
+            indentWidthBuilder: indentWidthBuilder,
+            numberPointWidthBuilder: numberPointWidthBuilder,
+          ),
           _getSpacingForLine(line, index, count, defaultStyles),
           textDirection,
           textSelection,
@@ -227,6 +237,7 @@ class EditableTextBlock extends StatelessWidget {
     required int index,
     required Map<int, int> indentLevelCounts,
     required int count,
+    required TextStyle? markerStyle,
   }) {
     final defaultStyles = QuillStyles.getStyles(context, false)!;
     final fontSize = defaultStyles.paragraph?.style.fontSize ?? 16;
@@ -234,27 +245,6 @@ class EditableTextBlock extends StatelessWidget {
     final numberPointWidthBuilder =
         defaultStyles.lists?.numberPointWidthBuilder ??
             TextBlockUtils.defaultNumberPointWidthBuilder;
-
-    // Of the color button
-    final fontColor =
-        line.toDelta().operations.first.attributes?[Attribute.color.key] != null
-            ? hexToColor(
-                line
-                    .toDelta()
-                    .operations
-                    .first
-                    .attributes?[Attribute.color.key],
-              )
-            : null;
-
-    // Of the size button
-    final size =
-        line.toDelta().operations.first.attributes?[Attribute.size.key] != null
-            ? getFontSizeAsDouble(
-                line.toDelta().operations.first.attributes?[Attribute.size.key],
-                defaultStyles: defaultStyles,
-              )
-            : null;
 
     // Of the alignment buttons
     // final textAlign = line.style.attributes[Attribute.align.key]?.value != null
@@ -277,17 +267,10 @@ class EditableTextBlock extends StatelessWidget {
       enabled: !isCheck ? null : !(checkBoxReadOnly ?? readOnly),
       style: () {
         if (isOrdered) {
-          return defaultStyles.leading!.style.copyWith(
-            fontSize: size,
-            color: fontColor,
-          );
+          return markerStyle;
         }
         if (isUnordered) {
-          return defaultStyles.leading!.style.copyWith(
-            fontWeight: FontWeight.bold,
-            fontSize: size,
-            color: fontColor,
-          );
+          return markerStyle;
         }
         if (isCheck) {
           return null;
@@ -298,16 +281,20 @@ class EditableTextBlock extends StatelessWidget {
       }(),
       width: () {
         if (isOrdered || isCodeBlock) {
-          return numberPointWidthBuilder(fontSize, count);
+          return numberPointWidthBuilder(
+              markerStyle?.fontSize ?? fontSize, count);
         }
         if (isUnordered) {
-          return numberPointWidthBuilder(fontSize, 1); // same as fontSize * 2
+          return numberPointWidthBuilder(
+            markerStyle?.fontSize ?? fontSize,
+            1,
+          );
         }
         return null;
       }(),
       padding: () {
         if (isOrdered || isUnordered) {
-          return fontSize / 2;
+          return (markerStyle?.fontSize ?? fontSize) / 2;
         }
         if (isCodeBlock) {
           return fontSize;
@@ -346,6 +333,149 @@ class EditableTextBlock extends StatelessWidget {
       return codeBlockLineNumberLeading(leadingConfig);
     }
     return null;
+  }
+
+  TextStyle? _listMarkerStyle(Line line, DefaultStyles defaultStyles) {
+    final listAttribute = line.style.attributes[Attribute.list.key];
+    if (listAttribute != Attribute.ul && listAttribute != Attribute.ol) {
+      return null;
+    }
+
+    var style = _markerTypography(
+      (defaultStyles.paragraph?.style ?? const TextStyle(fontSize: 16)).merge(
+        defaultStyles.lists?.style,
+      ),
+    );
+    if (listAttribute == Attribute.ul && style.fontWeight == null) {
+      style = style.copyWith(fontWeight: FontWeight.bold);
+    }
+
+    final customAttributes = <Attribute>[...line.style.values];
+    if (line.isNotEmpty) {
+      final firstRunStyle = line.children.first.style;
+      style = style.merge(_markerStyleForAttributes(
+        firstRunStyle,
+        defaultStyles,
+      ));
+      customAttributes.addAll(firstRunStyle.values);
+    } else if (_isActiveEmptyLine(line)) {
+      style = style.merge(_markerStyleForAttributes(
+        controller.toggledStyle,
+        defaultStyles,
+      ));
+      customAttributes.addAll(controller.toggledStyle.values);
+    }
+
+    final styleBuilder = customStyleBuilder;
+    if (styleBuilder != null) {
+      for (final attribute in customAttributes) {
+        if (!_isMarkerCustomStyleAttribute(attribute)) {
+          continue;
+        }
+        style = style.merge(_markerTypography(styleBuilder(attribute)));
+      }
+    }
+
+    return _markerTypography(style).copyWith(
+      decoration: TextDecoration.none,
+      backgroundColor: null,
+    );
+  }
+
+  bool _isActiveEmptyLine(Line line) {
+    return line.isEmpty &&
+        textSelection.isCollapsed &&
+        textSelection.extentOffset == line.documentOffset;
+  }
+
+  bool _isMarkerCustomStyleAttribute(Attribute attribute) {
+    return !<String>{
+      Attribute.background.key,
+      Attribute.inlineCode.key,
+      Attribute.link.key,
+      Attribute.script.key,
+      Attribute.strikeThrough.key,
+      Attribute.underline.key,
+    }.contains(attribute.key);
+  }
+
+  TextStyle _markerStyleForAttributes(
+    Style attributes,
+    DefaultStyles defaultStyles,
+  ) {
+    var style = const TextStyle();
+    if (attributes.containsKey(Attribute.bold.key)) {
+      style = style.merge(defaultStyles.bold);
+    }
+    if (attributes.containsKey(Attribute.small.key)) {
+      style = style.merge(defaultStyles.small);
+    }
+
+    final font = attributes.attributes[Attribute.font.key];
+    if (font?.value != null) {
+      style = style.merge(TextStyle(fontFamily: font!.value));
+    }
+
+    final size = attributes.attributes[Attribute.size.key];
+    if (size?.value != null) {
+      final fontSize = getFontSizeAsDouble(
+        size!.value,
+        defaultStyles: defaultStyles,
+      );
+      if (fontSize != null) {
+        style = style.merge(TextStyle(fontSize: fontSize));
+      }
+    }
+
+    final color = attributes.attributes[Attribute.color.key];
+    if (color?.value is String) {
+      style = style.merge(TextStyle(
+        color: stringToColor(color!.value, null, defaultStyles),
+      ));
+    }
+
+    return _markerTypography(style);
+  }
+
+  TextStyle _markerTypography(TextStyle style) {
+    return TextStyle(
+      color: style.color,
+      fontFamily: style.fontFamily,
+      fontFamilyFallback: style.fontFamilyFallback,
+      fontSize: style.fontSize,
+      fontWeight: style.fontWeight,
+      fontStyle: style.fontStyle,
+      height: style.height,
+    );
+  }
+
+  HorizontalSpacing _listIndentSpacing({
+    required BuildContext context,
+    required Line line,
+    required int count,
+    required TextStyle? markerStyle,
+    required LeadingBlockIndentWidth indentWidthBuilder,
+    required LeadingBlockNumberPointWidth numberPointWidthBuilder,
+  }) {
+    if (markerStyle == null ||
+        indentWidthBuilder != TextBlockUtils.defaultIndentWidthBuilder) {
+      return indentWidthBuilder(
+        block,
+        context,
+        count,
+        numberPointWidthBuilder,
+      );
+    }
+
+    final fontSize = markerStyle.fontSize ?? 16;
+    final attrs = line.style.attributes;
+    final listAttribute = attrs[Attribute.list.key];
+    final markerWidth = numberPointWidthBuilder(
+      fontSize,
+      listAttribute == Attribute.ol ? count : 1,
+    );
+    final indent = attrs[Attribute.indent.key]?.value as int? ?? 0;
+    return HorizontalSpacing(markerWidth + fontSize * indent, 0);
   }
 
   VerticalSpacing _getSpacingForLine(
