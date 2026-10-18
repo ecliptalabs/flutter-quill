@@ -1,6 +1,7 @@
 import 'package:flutter/rendering.dart';
 
 import '../../document/nodes/container.dart';
+import '../presentation/presentation_gap.dart';
 
 /// A common interface to render boxes which represent a piece of rich text
 /// content.
@@ -29,6 +30,14 @@ abstract class RenderContentProxyBox implements RenderBox {
   ///
   /// Valid only after [layout]
   List<TextBox> getBoxesForSelection(TextSelection textSelection);
+
+  /// A value snapshot of physical rendered lines in this box.
+  List<QuillPhysicalLineGeometry> getLayoutLines(int documentOffset);
+
+  bool get isEmbed;
+
+  /// Blank rectangles introduced by presentation gaps in local coordinates.
+  List<Rect> get presentationGapRects;
 }
 
 /// Base class for render boxes of editable content.
@@ -138,4 +147,10 @@ abstract class RenderEditableBox extends RenderBox {
   /// Returns the [Rect] of the caret prototype at the given text
   /// position. [Rect] starts at origin.
   Rect getCaretPrototype(TextPosition position);
+
+  /// Returns value-only layout fragments translated by [offset].
+  List<QuillLayoutFragment> getLayoutFragments(Offset offset);
+
+  /// Blank rectangles introduced by presentation gaps in local coordinates.
+  List<Rect> get presentationGapRects;
 }

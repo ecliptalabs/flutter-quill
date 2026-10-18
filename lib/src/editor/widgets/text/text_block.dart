@@ -15,6 +15,7 @@ import '../../../document/nodes/line.dart';
 import '../../../document/style.dart';
 import '../../editor.dart';
 import '../../embed/embed_editor_builder.dart';
+import '../../presentation/presentation_gap.dart';
 import '../../raw_editor/builders/leading_block_builder.dart';
 import '../box.dart';
 import '../cursor.dart';
@@ -39,7 +40,7 @@ const List<int> arabianRomanNumbers = [
   9,
   5,
   4,
-  1
+  1,
 ];
 
 const List<String> romanNumbers = [
@@ -55,7 +56,7 @@ const List<String> romanNumbers = [
   'IX',
   'V',
   'IV',
-  'I'
+  'I',
 ];
 
 class _ListMarkerLayout {
@@ -103,6 +104,7 @@ class EditableTextBlock extends StatelessWidget {
     this.customStyleBuilder,
     this.customLinkPrefixes = const <String>[],
     this.customLeadingBlockBuilder,
+    this.presentationGapPlan,
     super.key,
   });
 
@@ -133,6 +135,7 @@ class EditableTextBlock extends StatelessWidget {
   final bool? checkBoxReadOnly;
   final List<String> customLinkPrefixes;
   final TextRange composingRange;
+  final QuillPresentationGapPlan? presentationGapPlan;
 
   @override
   Widget build(BuildContext context) {
@@ -148,16 +151,14 @@ class EditableTextBlock extends StatelessWidget {
       decoration:
           _getDecorationForBlock(block, defaultStyles) ?? const BoxDecoration(),
       contentPadding: contentPadding,
-      children: _buildChildren(
-        context,
-        indentLevelCounts,
-        clearIndents,
-      ),
+      children: _buildChildren(context, indentLevelCounts, clearIndents),
     );
   }
 
   BoxDecoration? _getDecorationForBlock(
-      Block node, DefaultStyles? defaultStyles) {
+    Block node,
+    DefaultStyles? defaultStyles,
+  ) {
     final attrs = block.style.attributes;
     if (attrs.containsKey(Attribute.blockQuote.key)) {
       // Verify if the direction is RTL and avoid passing the decoration
@@ -177,13 +178,17 @@ class EditableTextBlock extends StatelessWidget {
     return null;
   }
 
-  List<Widget> _buildChildren(BuildContext context,
-      Map<int, int> indentLevelCounts, bool clearIndents) {
+  List<Widget> _buildChildren(
+    BuildContext context,
+    Map<int, int> indentLevelCounts,
+    bool clearIndents,
+  ) {
     final defaultStyles = QuillStyles.getStyles(context, false);
     final numberPointWidthBuilder =
         defaultStyles?.lists?.numberPointWidthBuilder ??
-            TextBlockUtils.defaultNumberPointWidthBuilder;
-    final indentWidthBuilder = defaultStyles?.lists?.indentWidthBuilder ??
+        TextBlockUtils.defaultNumberPointWidthBuilder;
+    final indentWidthBuilder =
+        defaultStyles?.lists?.indentWidthBuilder ??
         TextBlockUtils.defaultIndentWidthBuilder;
 
     final lines = Iterable.castFrom<dynamic, Line>(block.children).toList();
@@ -219,47 +224,51 @@ class EditableTextBlock extends StatelessWidget {
       final markerAnchor = markerLayout?.bulletAnchor == null
           ? null
           : markerLayout!.bulletAnchor! +
-              math.max<double>(0, lineSpacing.left - markerLayout.width);
+                math.max<double>(0, lineSpacing.left - markerLayout.width);
       final editableTextLine = EditableTextLine(
-          line,
-          _buildLeading(
-            context: context,
-            line: line,
-            index: index,
-            indentLevelCounts: indentLevelCounts,
-            count: count,
-            markerStyle: markerStyle,
-            markerWidth: markerLayout?.width,
-            markerPadding: markerLayout?.padding,
-            markerAnchor: markerAnchor,
-            resolvedIndex: markerLayout?.resolvedIndices[index - 1],
-          ),
-          TextLine(
-            line: line,
-            textDirection: textDirection,
-            embedBuilder: embedBuilder,
-            textSpanBuilder: textSpanBuilder,
-            customStyleBuilder: customStyleBuilder,
-            styles: styles!,
-            readOnly: readOnly,
-            controller: controller,
-            linkActionPicker: linkActionPicker,
-            onLaunchUrl: onLaunchUrl,
-            customLinkPrefixes: customLinkPrefixes,
-            customRecognizerBuilder: customRecognizerBuilder,
-            composingRange: composingRange,
-          ),
-          lineSpacing,
-          _getSpacingForLine(line, index, count, defaultStyles),
-          textDirection,
-          textSelection,
-          color,
-          enableInteractiveSelection,
-          hasFocus,
-          MediaQuery.devicePixelRatioOf(context),
-          cursorCont,
-          styles!.inlineCode!,
-          null);
+        line,
+        _buildLeading(
+          context: context,
+          line: line,
+          index: index,
+          indentLevelCounts: indentLevelCounts,
+          count: count,
+          markerStyle: markerStyle,
+          markerWidth: markerLayout?.width,
+          markerPadding: markerLayout?.padding,
+          markerAnchor: markerAnchor,
+          resolvedIndex: markerLayout?.resolvedIndices[index - 1],
+        ),
+        TextLine(
+          line: line,
+          textDirection: textDirection,
+          embedBuilder: embedBuilder,
+          textSpanBuilder: textSpanBuilder,
+          customStyleBuilder: customStyleBuilder,
+          styles: styles!,
+          readOnly: readOnly,
+          controller: controller,
+          linkActionPicker: linkActionPicker,
+          onLaunchUrl: onLaunchUrl,
+          customLinkPrefixes: customLinkPrefixes,
+          customRecognizerBuilder: customRecognizerBuilder,
+          composingRange: composingRange,
+          presentationGapPlan: presentationGapPlan,
+        ),
+        lineSpacing,
+        _getSpacingForLine(line, index, count, defaultStyles),
+        textDirection,
+        textSelection,
+        color,
+        enableInteractiveSelection,
+        hasFocus,
+        MediaQuery.devicePixelRatioOf(context),
+        cursorCont,
+        styles!.inlineCode!,
+        null,
+        presentationGapBefore:
+            presentationGapPlan?.gapBefore(line.documentOffset) ?? 0,
+      );
       final nodeTextDirection = getDirectionOfNode(line, textDirection);
       children.add(
         Directionality(
@@ -307,11 +316,7 @@ class EditableTextBlock extends StatelessWidget {
       padding = math.max(padding, fontSize / 2);
 
       final markerText = isOrdered
-          ? '${LeadingConfig.resolveIndexNumberByIndent(
-              index: index + 1,
-              attrs: line.style.attributes,
-              indentLevelCounts: indentLevelCounts,
-            )}.'
+          ? '${LeadingConfig.resolveIndexNumberByIndent(index: index + 1, attrs: line.style.attributes, indentLevelCounts: indentLevelCounts)}.'
           : '•';
       if (isOrdered) {
         resolvedIndices[index] = markerText.substring(0, markerText.length - 1);
@@ -338,10 +343,7 @@ class EditableTextBlock extends StatelessWidget {
 
     final anchor = math.max(baseFontSize, widestText / 2);
     return _ListMarkerLayout(
-      width: math.max(
-        configuredWidth,
-        anchor + widestText / 2 + padding,
-      ),
+      width: math.max(configuredWidth, anchor + widestText / 2 + padding),
       padding: padding,
       indentSize: baseFontSize,
       resolvedIndices: resolvedIndices,
@@ -366,7 +368,7 @@ class EditableTextBlock extends StatelessWidget {
     final attrs = line.style.attributes;
     final numberPointWidthBuilder =
         defaultStyles.lists?.numberPointWidthBuilder ??
-            TextBlockUtils.defaultNumberPointWidthBuilder;
+        TextBlockUtils.defaultNumberPointWidthBuilder;
 
     // Of the alignment buttons
     // final textAlign = line.style.attributes[Attribute.align.key]?.value != null
@@ -408,13 +410,12 @@ class EditableTextBlock extends StatelessWidget {
         }
         if (isOrdered || isCodeBlock) {
           return numberPointWidthBuilder(
-              markerStyle?.fontSize ?? fontSize, count);
+            markerStyle?.fontSize ?? fontSize,
+            count,
+          );
         }
         if (isUnordered) {
-          return numberPointWidthBuilder(
-            markerStyle?.fontSize ?? fontSize,
-            1,
-          );
+          return numberPointWidthBuilder(markerStyle?.fontSize ?? fontSize, 1);
         }
         return null;
       }(),
@@ -483,21 +484,21 @@ class EditableTextBlock extends StatelessWidget {
     final customAttributes = <Attribute>[...line.style.values];
     if (line.isNotEmpty) {
       final firstRunStyle = line.children.first.style;
-      style = style.merge(_markerStyleForAttributes(
-        firstRunStyle,
-        defaultStyles,
-      ));
+      style = style.merge(
+        _markerStyleForAttributes(firstRunStyle, defaultStyles),
+      );
       customAttributes.addAll(firstRunStyle.values);
     } else {
-      var emptyLineStyle =
-          controller.document.collectStyle(line.documentOffset, 0);
+      var emptyLineStyle = controller.document.collectStyle(
+        line.documentOffset,
+        0,
+      );
       if (_isActiveEmptyLine(line)) {
         emptyLineStyle = emptyLineStyle.mergeAll(controller.toggledStyle);
       }
-      style = style.merge(_markerStyleForAttributes(
-        emptyLineStyle,
-        defaultStyles,
-      ));
+      style = style.merge(
+        _markerStyleForAttributes(emptyLineStyle, defaultStyles),
+      );
       customAttributes.addAll(emptyLineStyle.values);
     }
 
@@ -511,10 +512,9 @@ class EditableTextBlock extends StatelessWidget {
       }
     }
 
-    return _markerTypography(style).copyWith(
-      decoration: TextDecoration.none,
-      backgroundColor: null,
-    );
+    return _markerTypography(
+      style,
+    ).copyWith(decoration: TextDecoration.none, backgroundColor: null);
   }
 
   bool _isActiveEmptyLine(Line line) {
@@ -564,9 +564,9 @@ class EditableTextBlock extends StatelessWidget {
 
     final color = attributes.attributes[Attribute.color.key];
     if (color?.value is String) {
-      style = style.merge(TextStyle(
-        color: stringToColor(color!.value, null, defaultStyles),
-      ));
+      style = style.merge(
+        TextStyle(color: stringToColor(color!.value, null, defaultStyles)),
+      );
     }
 
     return _markerTypography(style);
@@ -595,18 +595,14 @@ class EditableTextBlock extends StatelessWidget {
     required LeadingBlockNumberPointWidth numberPointWidthBuilder,
   }) {
     if (markerStyle == null) {
-      return indentWidthBuilder(
-        block,
-        context,
-        count,
-        numberPointWidthBuilder,
-      );
+      return indentWidthBuilder(block, context, count, numberPointWidthBuilder);
     }
 
     final fontSize = markerStyle.fontSize ?? 16;
     final attrs = line.style.attributes;
     final listAttribute = attrs[Attribute.list.key];
-    final effectiveMarkerWidth = markerWidth ??
+    final effectiveMarkerWidth =
+        markerWidth ??
         numberPointWidthBuilder(
           fontSize,
           listAttribute == Attribute.ol ? count : 1,
@@ -710,14 +706,11 @@ class RenderEditableTextBlock extends RenderEditableContainerBox
     required Decoration decoration,
     super.children,
     EdgeInsets contentPadding = EdgeInsets.zero,
-  })  : _decoration = decoration,
-        _configuration = ImageConfiguration(textDirection: textDirection),
-        _savedPadding = padding,
-        _contentPadding = contentPadding,
-        super(
-          container: block,
-          padding: padding.add(contentPadding),
-        );
+  }) : _decoration = decoration,
+       _configuration = ImageConfiguration(textDirection: textDirection),
+       _savedPadding = padding,
+       _contentPadding = contentPadding,
+       super(container: block, padding: padding.add(contentPadding));
 
   EdgeInsetsGeometry _savedPadding;
   EdgeInsets _contentPadding;
@@ -759,10 +752,12 @@ class RenderEditableTextBlock extends RenderEditableContainerBox
   @override
   TextRange getLineBoundary(TextPosition position) {
     final child = childAtPosition(position);
-    final rangeInChild = child.getLineBoundary(TextPosition(
-      offset: position.offset - child.container.offset,
-      affinity: position.affinity,
-    ));
+    final rangeInChild = child.getLineBoundary(
+      TextPosition(
+        offset: position.offset - child.container.offset,
+        affinity: position.affinity,
+      ),
+    );
     return TextRange(
       start: rangeInChild.start + child.container.offset,
       end: rangeInChild.end + child.container.offset,
@@ -772,10 +767,12 @@ class RenderEditableTextBlock extends RenderEditableContainerBox
   @override
   Offset getOffsetForCaret(TextPosition position) {
     final child = childAtPosition(position);
-    return child.getOffsetForCaret(TextPosition(
-          offset: position.offset - child.container.offset,
-          affinity: position.affinity,
-        )) +
+    return child.getOffsetForCaret(
+          TextPosition(
+            offset: position.offset - child.container.offset,
+            affinity: position.affinity,
+          ),
+        ) +
         (child.parentData as BoxParentData).offset;
   }
 
@@ -783,8 +780,9 @@ class RenderEditableTextBlock extends RenderEditableContainerBox
   TextPosition getPositionForOffset(Offset offset) {
     final child = childAtOffset(offset);
     final parentData = child.parentData as BoxParentData;
-    final localPosition =
-        child.getPositionForOffset(offset - parentData.offset);
+    final localPosition = child.getPositionForOffset(
+      offset - parentData.offset,
+    );
     return TextPosition(
       offset: localPosition.offset + child.container.offset,
       affinity: localPosition.affinity,
@@ -795,8 +793,9 @@ class RenderEditableTextBlock extends RenderEditableContainerBox
   TextRange getWordBoundary(TextPosition position) {
     final child = childAtPosition(position);
     final nodeOffset = child.container.offset;
-    final childWord = child
-        .getWordBoundary(TextPosition(offset: position.offset - nodeOffset));
+    final childWord = child.getWordBoundary(
+      TextPosition(offset: position.offset - nodeOffset),
+    );
     return TextRange(
       start: childWord.start + nodeOffset,
       end: childWord.end + nodeOffset,
@@ -808,8 +807,9 @@ class RenderEditableTextBlock extends RenderEditableContainerBox
     assert(position.offset < container.length);
 
     final child = childAtPosition(position);
-    final childLocalPosition =
-        TextPosition(offset: position.offset - child.container.offset);
+    final childLocalPosition = TextPosition(
+      offset: position.offset - child.container.offset,
+    );
     final result = child.getPositionAbove(childLocalPosition);
     if (result != null) {
       return TextPosition(offset: result.offset + child.container.offset);
@@ -825,8 +825,10 @@ class RenderEditableTextBlock extends RenderEditableContainerBox
     final testOffset = sibling.getOffsetForCaret(testPosition);
     final finalOffset = Offset(caretOffset.dx, testOffset.dy);
     return TextPosition(
-        offset: sibling.container.offset +
-            sibling.getPositionForOffset(finalOffset).offset);
+      offset:
+          sibling.container.offset +
+          sibling.getPositionForOffset(finalOffset).offset,
+    );
   }
 
   @override
@@ -834,8 +836,9 @@ class RenderEditableTextBlock extends RenderEditableContainerBox
     assert(position.offset < container.length);
 
     final child = childAtPosition(position);
-    final childLocalPosition =
-        TextPosition(offset: position.offset - child.container.offset);
+    final childLocalPosition = TextPosition(
+      offset: position.offset - child.container.offset,
+    );
     final result = child.getPositionBelow(childLocalPosition);
     if (result != null) {
       return TextPosition(offset: result.offset + child.container.offset);
@@ -850,15 +853,18 @@ class RenderEditableTextBlock extends RenderEditableContainerBox
     final testOffset = sibling.getOffsetForCaret(const TextPosition(offset: 0));
     final finalOffset = Offset(caretOffset.dx, testOffset.dy);
     return TextPosition(
-        offset: sibling.container.offset +
-            sibling.getPositionForOffset(finalOffset).offset);
+      offset:
+          sibling.container.offset +
+          sibling.getPositionForOffset(finalOffset).offset,
+    );
   }
 
   @override
   double preferredLineHeight(TextPosition position) {
     final child = childAtPosition(position);
     return child.preferredLineHeight(
-        TextPosition(offset: position.offset - child.container.offset));
+      TextPosition(offset: position.offset - child.container.offset),
+    );
   }
 
   @override
@@ -871,12 +877,7 @@ class RenderEditableTextBlock extends RenderEditableContainerBox
       );
     }
 
-    final baseNode = container
-        .queryChild(
-          selection.start,
-          false,
-        )
-        .node;
+    final baseNode = container.queryChild(selection.start, false).node;
     var baseChild = firstChild;
     while (baseChild != null) {
       if (baseChild.container == baseNode) {
@@ -887,11 +888,7 @@ class RenderEditableTextBlock extends RenderEditableContainerBox
     assert(baseChild != null);
 
     final basePoint = baseChild!.getBaseEndpointForSelection(
-      localSelection(
-        baseChild.container,
-        selection,
-        true,
-      ),
+      localSelection(baseChild.container, selection, true),
     );
     return TextSelectionPoint(
       basePoint.point + (baseChild.parentData as BoxParentData).offset,
@@ -921,11 +918,7 @@ class RenderEditableTextBlock extends RenderEditableContainerBox
     assert(extentChild != null);
 
     final extentPoint = extentChild!.getExtentEndpointForSelection(
-      localSelection(
-        extentChild.container,
-        selection,
-        true,
-      ),
+      localSelection(extentChild.container, selection, true),
     );
     return TextSelectionPoint(
       extentPoint.point + (extentChild.parentData as BoxParentData).offset,
@@ -952,13 +945,30 @@ class RenderEditableTextBlock extends RenderEditableContainerBox
 
     final decorationPadding = resolvedPadding! - _contentPadding;
 
-    final filledConfiguration =
-        configuration.copyWith(size: decorationPadding.deflateSize(size));
+    final filledConfiguration = configuration.copyWith(
+      size: decorationPadding.deflateSize(size),
+    );
     final debugSaveCount = context.canvas.getSaveCount();
 
-    final decorationOffset =
-        offset.translate(decorationPadding.left, decorationPadding.top);
+    final decorationOffset = offset.translate(
+      decorationPadding.left,
+      decorationPadding.top,
+    );
+    final gaps = presentationGapRects;
+    if (gaps.isNotEmpty) {
+      final bounds = offset & size;
+      final path = Path()
+        ..fillType = PathFillType.evenOdd
+        ..addRect(bounds);
+      for (final gap in gaps) {
+        path.addRect(gap.shift(offset));
+      }
+      context.canvas
+        ..save()
+        ..clipPath(path);
+    }
     _painter!.paint(context.canvas, decorationOffset, filledConfiguration);
+    if (gaps.isNotEmpty) context.canvas.restore();
     if (debugSaveCount != context.canvas.getSaveCount()) {
       throw StateError(
         '${_decoration.runtimeType} painter had mismatching save and  '
@@ -988,8 +998,10 @@ class RenderEditableTextBlock extends RenderEditableContainerBox
 
   @override
   TextPosition globalToLocalPosition(TextPosition position) {
-    assert(container.containsOffset(position.offset) || container.length == 0,
-        'The provided text position is not in the current node');
+    assert(
+      container.containsOffset(position.offset) || container.length == 0,
+      'The provided text position is not in the current node',
+    );
     return TextPosition(
       offset: position.offset - container.documentOffset,
       affinity: position.affinity,
@@ -1005,18 +1017,45 @@ class RenderEditableTextBlock extends RenderEditableContainerBox
     );
     return child.getCaretPrototype(localPosition);
   }
+
+  @override
+  List<QuillLayoutFragment> getLayoutFragments(Offset offset) {
+    final result = <QuillLayoutFragment>[];
+    var child = firstChild;
+    while (child != null) {
+      final parentData = child.parentData as EditableContainerParentData;
+      result.addAll(child.getLayoutFragments(offset + parentData.offset));
+      child = parentData.nextSibling;
+    }
+    return result;
+  }
+
+  @override
+  List<Rect> get presentationGapRects {
+    final result = <Rect>[];
+    var child = firstChild;
+    while (child != null) {
+      final parentData = child.parentData as EditableContainerParentData;
+      result.addAll(
+        child.presentationGapRects.map((rect) => rect.shift(parentData.offset)),
+      );
+      child = parentData.nextSibling;
+    }
+    return result;
+  }
 }
 
 class _EditableBlock extends MultiChildRenderObjectWidget {
-  const _EditableBlock(
-      {required this.block,
-      required this.textDirection,
-      required this.horizontalSpacing,
-      required this.verticalSpacing,
-      required this.scrollBottomInset,
-      required this.decoration,
-      required this.contentPadding,
-      required super.children});
+  const _EditableBlock({
+    required this.block,
+    required this.textDirection,
+    required this.horizontalSpacing,
+    required this.verticalSpacing,
+    required this.scrollBottomInset,
+    required this.decoration,
+    required this.contentPadding,
+    required super.children,
+  });
 
   final Block block;
   final TextDirection textDirection;
@@ -1027,10 +1066,11 @@ class _EditableBlock extends MultiChildRenderObjectWidget {
   final EdgeInsets? contentPadding;
 
   EdgeInsets get _padding => EdgeInsets.only(
-      left: horizontalSpacing.left,
-      right: horizontalSpacing.right,
-      top: verticalSpacing.top,
-      bottom: verticalSpacing.bottom);
+    left: horizontalSpacing.left,
+    right: horizontalSpacing.right,
+    top: verticalSpacing.top,
+    bottom: verticalSpacing.bottom,
+  );
 
   EdgeInsets get _contentPadding => contentPadding ?? EdgeInsets.zero;
 
@@ -1048,7 +1088,9 @@ class _EditableBlock extends MultiChildRenderObjectWidget {
 
   @override
   void updateRenderObject(
-      BuildContext context, covariant RenderEditableTextBlock renderObject) {
+    BuildContext context,
+    covariant RenderEditableTextBlock renderObject,
+  ) {
     renderObject
       ..setContainer(block)
       ..textDirection = textDirection

@@ -10,6 +10,7 @@ import 'package:meta/meta.dart' show experimental;
 import '../../document/nodes/node.dart';
 import '../../toolbar/theme/quill_dialog_theme.dart';
 import '../embed/embed_editor_builder.dart';
+import '../presentation/presentation_gap.dart';
 import '../raw_editor/builders/leading_block_builder.dart';
 import '../raw_editor/config/events/events.dart';
 import '../raw_editor/config/raw_editor_config.dart';
@@ -86,10 +87,15 @@ class QuillEditorConfig {
     this.readOnlyMouseCursor = SystemMouseCursors.text,
     this.onPerformAction,
     @experimental this.customLeadingBlockBuilder,
+    this.presentationGapPlan,
   });
 
   @experimental
   final LeadingBlockNodeBuilder? customLeadingBlockBuilder;
+
+  /// Optional renderer-only vertical gaps. Omitting this preserves the
+  /// editor's ordinary layout behavior.
+  final QuillPresentationGapPlan? presentationGapPlan;
 
   /// The text placeholder in the quill editor
   final String? placeholder;
@@ -345,25 +351,38 @@ class QuillEditorConfig {
 
   // Returns whether gesture is handled
   final bool Function(
-      TapDownDetails details, TextPosition Function(Offset offset))? onTapDown;
+    TapDownDetails details,
+    TextPosition Function(Offset offset),
+  )?
+  onTapDown;
 
   // Returns whether gesture is handled
   final bool Function(
-      TapUpDetails details, TextPosition Function(Offset offset))? onTapUp;
+    TapUpDetails details,
+    TextPosition Function(Offset offset),
+  )?
+  onTapUp;
 
   // Returns whether gesture is handled
   final bool Function(
-          LongPressStartDetails details, TextPosition Function(Offset offset))?
-      onSingleLongTapStart;
-
-  // Returns whether gesture is handled
-  final bool Function(LongPressMoveUpdateDetails details,
-      TextPosition Function(Offset offset))? onSingleLongTapMoveUpdate;
+    LongPressStartDetails details,
+    TextPosition Function(Offset offset),
+  )?
+  onSingleLongTapStart;
 
   // Returns whether gesture is handled
   final bool Function(
-          LongPressEndDetails details, TextPosition Function(Offset offset))?
-      onSingleLongTapEnd;
+    LongPressMoveUpdateDetails details,
+    TextPosition Function(Offset offset),
+  )?
+  onSingleLongTapMoveUpdate;
+
+  // Returns whether gesture is handled
+  final bool Function(
+    LongPressEndDetails details,
+    TextPosition Function(Offset offset),
+  )?
+  onSingleLongTapEnd;
 
   final Iterable<EmbedBuilder>? embedBuilders;
   final EmbedBuilder? unknownEmbedBuilder;
@@ -504,9 +523,9 @@ class QuillEditorConfig {
     ScrollPhysics? scrollPhysics,
     ValueChanged<String>? onLaunchUrl,
     bool Function(TapDownDetails details, TextPosition Function(Offset offset))?
-        onTapDown,
+    onTapDown,
     bool Function(TapUpDetails details, TextPosition Function(Offset offset))?
-        onTapUp,
+    onTapUp,
     Iterable<EmbedBuilder>? embedBuilders,
     TextSpanBuilder? textSpanBuilder,
     EmbedBuilder? unknownEmbedBuilder,
@@ -531,6 +550,7 @@ class QuillEditorConfig {
     void Function()? onScribbleActivated,
     EdgeInsets? scribbleAreaInsets,
     void Function(TextInputAction action)? onPerformAction,
+    QuillPresentationGapPlan? presentationGapPlan,
   }) {
     return QuillEditorConfig(
       customLeadingBlockBuilder:
@@ -594,12 +614,13 @@ class QuillEditorConfig {
           textSelectionThemeData ?? this.textSelectionThemeData,
       requestKeyboardFocusOnCheckListChanged:
           requestKeyboardFocusOnCheckListChanged ??
-              this.requestKeyboardFocusOnCheckListChanged,
+          this.requestKeyboardFocusOnCheckListChanged,
       textInputAction: textInputAction ?? this.textInputAction,
       enableScribble: enableScribble ?? this.enableScribble,
       onScribbleActivated: onScribbleActivated ?? this.onScribbleActivated,
       scribbleAreaInsets: scribbleAreaInsets ?? this.scribbleAreaInsets,
       onPerformAction: onPerformAction ?? this.onPerformAction,
+      presentationGapPlan: presentationGapPlan ?? this.presentationGapPlan,
     );
   }
 }

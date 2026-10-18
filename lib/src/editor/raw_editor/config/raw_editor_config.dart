@@ -5,6 +5,7 @@ import 'package:meta/meta.dart';
 
 import '../../../document/nodes/node.dart';
 import '../../../editor/embed/embed_editor_builder.dart';
+import '../../../editor/presentation/presentation_gap.dart';
 import '../../../editor/raw_editor/raw_editor.dart';
 import '../../../editor/raw_editor/raw_editor_state.dart';
 import '../../../editor/widgets/cursor.dart';
@@ -72,6 +73,7 @@ class QuillRawEditorConfig {
     this.onPerformAction,
     @experimental this.customLeadingBuilder,
     this.quillMagnifierBuilder,
+    this.presentationGapPlan,
   });
 
   /// Controls whether this editor has keyboard focus.
@@ -413,4 +415,7 @@ class QuillRawEditorConfig {
 
   /// Used to build the [QuillMagnifier] when long-pressing/dragging selection
   final QuillMagnifierBuilder? quillMagnifierBuilder;
+
+  /// Optional renderer-only vertical gaps.
+  final QuillPresentationGapPlan? presentationGapPlan;
 }
