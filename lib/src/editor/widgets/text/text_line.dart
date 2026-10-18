@@ -34,6 +34,7 @@ class TextLine extends StatefulWidget {
     required this.composingRange,
     this.textDirection,
     this.customStyleBuilder,
+    this.finalTextStyleResolver,
     this.customRecognizerBuilder,
     this.customLinkPrefixes = const <String>[],
     super.key,
@@ -47,6 +48,7 @@ class TextLine extends StatefulWidget {
   final bool readOnly;
   final QuillController controller;
   final CustomStyleBuilder? customStyleBuilder;
+  final QuillFinalTextStyleResolver? finalTextStyleResolver;
   final CustomRecognizerBuilder? customRecognizerBuilder;
   final ValueChanged<String>? onLaunchUrl;
   final LinkActionPicker linkActionPicker;
@@ -308,7 +310,7 @@ class _TextLineState extends State<TextLine> {
           .map((node) => _getTextSpanFromNode(
                 defaultStyles,
                 node,
-                widget.line.style,
+                lineStyle,
                 textSpanBuilder,
               ))
           .toList(growable: false);
@@ -316,17 +318,19 @@ class _TextLineState extends State<TextLine> {
     }
 
     final children = nodes.expand((node) {
-      final child = _getTextSpanFromNode(
-        defaultStyles,
-        node,
-        widget.line.style,
-        textSpanBuilder,
-      );
       final isNodeInComposingRange =
           node.documentOffset <= widget.composingRange.start &&
               widget.composingRange.end <= node.documentOffset + node.length;
+      final child = _getTextSpanFromNode(
+        defaultStyles,
+        node,
+        lineStyle,
+        textSpanBuilder,
+        resolveFinalStyle: !isNodeInComposingRange,
+      );
       if (isNodeInComposingRange) {
-        return _splitAndApplyComposingStyle(node, child, textSpanBuilder);
+        return _splitAndApplyComposingStyle(
+            node, child, lineStyle, textSpanBuilder);
       } else {
         return [child];
       }
@@ -340,6 +344,7 @@ class _TextLineState extends State<TextLine> {
   List<InlineSpan> _splitAndApplyComposingStyle(
     Node node,
     InlineSpan child,
+    TextStyle lineStyle,
     TextSpanBuilder textSpanBuilder,
   ) {
     assert(widget.composingRange.isValid && !widget.composingRange.isCollapsed);
@@ -358,6 +363,21 @@ class _TextLineState extends State<TextLine> {
 
     final isLink = node.style.attributes[Attribute.link.key]?.value != null;
     final recognizer = _getRecognizer(node, isLink);
+    final resolver = widget.finalTextStyleResolver;
+    final effectiveAttributes =
+        resolver == null ? null : widget.line.style.mergeAll(node.style);
+
+    TextStyle? resolve(TextStyle? style) {
+      if (resolver == null) {
+        return style;
+      }
+      return resolver(
+        context,
+        lineStyle.merge(style),
+        effectiveAttributes!,
+        QuillFinalTextStyleRole.text,
+      );
+    }
 
     return [
       textSpanBuilder(
@@ -365,7 +385,7 @@ class _TextLineState extends State<TextLine> {
         node,
         0,
         textBefore,
-        child.style,
+        resolve(child.style),
         recognizer,
       ),
       textSpanBuilder(
@@ -373,7 +393,7 @@ class _TextLineState extends State<TextLine> {
         node,
         composingStart,
         textComposing,
-        composingStyle,
+        resolve(composingStyle),
         recognizer,
       ),
       textSpanBuilder(
@@ -381,7 +401,7 @@ class _TextLineState extends State<TextLine> {
         node,
         composingEnd,
         textAfter,
-        child.style,
+        resolve(child.style),
         recognizer,
       ),
     ];
@@ -481,6 +501,15 @@ class _TextLineState extends State<TextLine> {
       widget.line.style,
       false,
     ));
+    final resolver = widget.finalTextStyleResolver;
+    final resolvedCaretStyle = resolver == null
+        ? caretStyle
+        : resolver(
+            context,
+            caretStyle,
+            widget.line.style.mergeAll(insertionStyle),
+            QuillFinalTextStyleRole.emptyLineCaret,
+          );
     final textScaler = MediaQuery.textScalerOf(context);
     final locale = Localizations.localeOf(context);
     TextPainter painter(TextStyle style) => TextPainter(
@@ -494,7 +523,7 @@ class _TextLineState extends State<TextLine> {
         )..layout();
 
     final linePainter = painter(lineStyle);
-    final caretPainter = painter(caretStyle);
+    final caretPainter = painter(resolvedCaretStyle);
     final verticalOffset = caretPainter.computeLineMetrics().single.baseline -
         linePainter.computeLineMetrics().single.baseline;
     final minimumHeight = caretPainter.preferredLineHeight;
@@ -526,8 +555,12 @@ class _TextLineState extends State<TextLine> {
   ///
   /// Reduces text fontSize and shifts down or up. Increases fontWeight to maintain balance with normal text.
   /// Outputs characters individually to allow correct caret positioning and text selection.
-  InlineSpan _scriptSpan(String text, bool superScript, TextStyle style,
-      DefaultStyles defaultStyles) {
+  InlineSpan _scriptSpan(
+      String text,
+      bool superScript,
+      TextStyle style,
+      DefaultStyles defaultStyles,
+      Style? effectiveAttributes) {
     assert(text.isNotEmpty);
     //
     final lineStyle = style.fontSize == null || style.fontWeight == null
@@ -539,10 +572,19 @@ class _TextLineState extends State<TextLine> {
         0.25);
     final fontSize = style.fontSize ?? lineStyle?.fontSize ?? 16;
     final y = (superScript ? -0.4 : 0.14) * fontSize;
-    final charStyle = style.copyWith(
+    var charStyle = style.copyWith(
         fontFeatures: <FontFeature>[],
         fontWeight: fontWeight,
         fontSize: fontSize * 0.7);
+    final resolver = widget.finalTextStyleResolver;
+    if (resolver != null) {
+      charStyle = resolver(
+        context,
+        _getLineStyle(defaultStyles).merge(charStyle),
+        effectiveAttributes!,
+        QuillFinalTextStyleRole.script,
+      );
+    }
     //
     final offset = Offset(0, y);
     final children = <WidgetSpan>[];
@@ -565,33 +607,45 @@ class _TextLineState extends State<TextLine> {
   InlineSpan _getTextSpanFromNode(
     DefaultStyles defaultStyles,
     Node node,
-    Style lineStyle,
+    TextStyle lineStyle,
     TextSpanBuilder textSpanBuilder,
+    {bool resolveFinalStyle = true}
   ) {
     final textNode = node as leaf.QuillText;
     final nodeStyle = textNode.style;
     final isLink = nodeStyle.containsKey(Attribute.link.key) &&
         nodeStyle.attributes[Attribute.link.key]!.value != null;
     final style =
-        _getInlineTextStyle(nodeStyle, defaultStyles, lineStyle, isLink);
+        _getInlineTextStyle(nodeStyle, defaultStyles, widget.line.style, isLink);
+    final resolver = widget.finalTextStyleResolver;
+    final effectiveAttributes =
+        resolver == null ? null : widget.line.style.mergeAll(nodeStyle);
     if (widget.controller.config.requireScriptFontFeatures == false &&
         textNode.value.isNotEmpty) {
       if (nodeStyle.containsKey(Attribute.script.key)) {
         final attr = nodeStyle.attributes[Attribute.script.key];
         if (attr == Attribute.superscript || attr == Attribute.subscript) {
           return _scriptSpan(textNode.value, attr == Attribute.superscript,
-              style, defaultStyles);
+              style, defaultStyles, effectiveAttributes);
         }
       }
     }
 
     final recognizer = _getRecognizer(node, isLink);
+    final resolvedStyle = !resolveFinalStyle || resolver == null
+        ? style
+        : resolver(
+            context,
+            lineStyle.merge(style),
+            effectiveAttributes!,
+            QuillFinalTextStyleRole.text,
+          );
     return textSpanBuilder(
       context,
       textNode,
       0,
       textNode.value,
-      style,
+      resolvedStyle,
       recognizer,
     );
   }

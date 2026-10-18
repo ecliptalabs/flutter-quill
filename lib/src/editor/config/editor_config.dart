@@ -19,6 +19,7 @@ import '../widgets/delegate.dart';
 import '../widgets/link.dart' hide linkPrefixes;
 import '../widgets/text/magnifier.dart';
 import '../widgets/text/utils/text_block_utils.dart';
+import 'final_text_style_resolver.dart';
 import 'search_config.dart';
 
 // IMPORTANT For project authors: The QuillEditorConfig.copyWith()
@@ -65,6 +66,7 @@ class QuillEditorConfig {
     @experimental this.searchConfig = const QuillSearchConfig(),
     this.linkActionPickerDelegate = defaultLinkActionPickerDelegate,
     this.customStyleBuilder,
+    this.finalTextStyleResolver,
     this.customRecognizerBuilder,
     this.floatingCursorDisabled = false,
     this.textSelectionControls,
@@ -368,6 +370,14 @@ class QuillEditorConfig {
   final Iterable<EmbedBuilder>? embedBuilders;
   final EmbedBuilder? unknownEmbedBuilder;
   final CustomStyleBuilder? customStyleBuilder;
+
+  /// Optionally resolves the complete effective style immediately before text
+  /// is rendered by Flutter Quill.
+  ///
+  /// This applies to ordinary text, script text, list markers, and active
+  /// empty-line caret measurements. When null, the existing rendering path is
+  /// unchanged.
+  final QuillFinalTextStyleResolver? finalTextStyleResolver;
   final CustomRecognizerBuilder? customRecognizerBuilder;
 
   final TextSpanBuilder textSpanBuilder;
@@ -511,6 +521,7 @@ class QuillEditorConfig {
     TextSpanBuilder? textSpanBuilder,
     EmbedBuilder? unknownEmbedBuilder,
     CustomStyleBuilder? customStyleBuilder,
+    QuillFinalTextStyleResolver? finalTextStyleResolver,
     CustomRecognizerBuilder? customRecognizerBuilder,
     QuillSearchConfig? searchConfig,
     LinkActionPickerDelegate? linkActionPickerDelegate,
@@ -572,6 +583,8 @@ class QuillEditorConfig {
       textSpanBuilder: textSpanBuilder ?? this.textSpanBuilder,
       unknownEmbedBuilder: unknownEmbedBuilder ?? this.unknownEmbedBuilder,
       customStyleBuilder: customStyleBuilder ?? this.customStyleBuilder,
+      finalTextStyleResolver:
+          finalTextStyleResolver ?? this.finalTextStyleResolver,
       customRecognizerBuilder:
           customRecognizerBuilder ?? this.customRecognizerBuilder,
       searchConfig: searchConfig ?? this.searchConfig,

@@ -13,6 +13,7 @@ import '../../../document/attribute.dart';
 import '../../../document/nodes/block.dart';
 import '../../../document/nodes/line.dart';
 import '../../../document/style.dart';
+import '../../config/final_text_style_resolver.dart';
 import '../../editor.dart';
 import '../../embed/embed_editor_builder.dart';
 import '../../raw_editor/builders/leading_block_builder.dart';
@@ -101,6 +102,7 @@ class EditableTextBlock extends StatelessWidget {
     this.checkBoxReadOnly,
     this.onLaunchUrl,
     this.customStyleBuilder,
+    this.finalTextStyleResolver,
     this.customLinkPrefixes = const <String>[],
     this.customLeadingBlockBuilder,
     super.key,
@@ -125,6 +127,7 @@ class EditableTextBlock extends StatelessWidget {
   final ValueChanged<String>? onLaunchUrl;
   final CustomRecognizerBuilder? customRecognizerBuilder;
   final CustomStyleBuilder? customStyleBuilder;
+  final QuillFinalTextStyleResolver? finalTextStyleResolver;
   final CursorCont cursorCont;
   final Map<int, int> indentLevelCounts;
   final bool clearIndents;
@@ -193,7 +196,7 @@ class EditableTextBlock extends StatelessWidget {
       indentLevelCounts.clear();
     }
     final markerStyles = lines
-        .map((line) => _listMarkerStyle(line, defaultStyles!))
+        .map((line) => _listMarkerStyle(context, line, defaultStyles!))
         .toList(growable: false);
     final markerLayout = _resolveListMarkerLayout(
       context: context,
@@ -240,6 +243,7 @@ class EditableTextBlock extends StatelessWidget {
             embedBuilder: embedBuilder,
             textSpanBuilder: textSpanBuilder,
             customStyleBuilder: customStyleBuilder,
+            finalTextStyleResolver: finalTextStyleResolver,
             styles: styles!,
             readOnly: readOnly,
             controller: controller,
@@ -465,7 +469,8 @@ class EditableTextBlock extends StatelessWidget {
     return null;
   }
 
-  TextStyle? _listMarkerStyle(Line line, DefaultStyles defaultStyles) {
+  TextStyle? _listMarkerStyle(
+      BuildContext context, Line line, DefaultStyles defaultStyles) {
     final listAttribute = line.style.attributes[Attribute.list.key];
     if (listAttribute != Attribute.ul && listAttribute != Attribute.ol) {
       return null;
@@ -481,8 +486,11 @@ class EditableTextBlock extends StatelessWidget {
     }
 
     final customAttributes = <Attribute>[...line.style.values];
+    final resolver = finalTextStyleResolver;
+    var effectiveAttributes = resolver == null ? null : line.style;
     if (line.isNotEmpty) {
       final firstRunStyle = line.children.first.style;
+      effectiveAttributes = effectiveAttributes?.mergeAll(firstRunStyle);
       style = style.merge(_markerStyleForAttributes(
         firstRunStyle,
         defaultStyles,
@@ -494,6 +502,7 @@ class EditableTextBlock extends StatelessWidget {
       if (_isActiveEmptyLine(line)) {
         emptyLineStyle = emptyLineStyle.mergeAll(controller.toggledStyle);
       }
+      effectiveAttributes = effectiveAttributes?.mergeAll(emptyLineStyle);
       style = style.merge(_markerStyleForAttributes(
         emptyLineStyle,
         defaultStyles,
@@ -511,9 +520,18 @@ class EditableTextBlock extends StatelessWidget {
       }
     }
 
-    return _markerTypography(style).copyWith(
+    final markerStyle = _markerTypography(style).copyWith(
       decoration: TextDecoration.none,
       backgroundColor: null,
+    );
+    if (resolver == null) {
+      return markerStyle;
+    }
+    return resolver(
+      context,
+      markerStyle,
+      effectiveAttributes!,
+      QuillFinalTextStyleRole.listMarker,
     );
   }
 

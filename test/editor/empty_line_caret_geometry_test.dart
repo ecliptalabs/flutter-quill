@@ -9,14 +9,18 @@ void main() {
 
   Future<void> pumpEditor(
     WidgetTester tester,
-    QuillController controller,
-  ) async {
+    QuillController controller, {
+    QuillFinalTextStyleResolver? finalTextStyleResolver,
+  }) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: QuillEditor.basic(
             controller: controller,
-            config: const QuillEditorConfig(padding: EdgeInsets.zero),
+            config: QuillEditorConfig(
+              padding: EdgeInsets.zero,
+              finalTextStyleResolver: finalTextStyleResolver,
+            ),
           ),
         ),
       ),
@@ -66,6 +70,7 @@ void main() {
     required int awayOffset,
     Style pendingStyle = const Style(),
     bool checkLineHeight = true,
+    QuillFinalTextStyleResolver? finalTextStyleResolver,
   }) async {
     final controller = QuillController(
       document: document,
@@ -74,7 +79,11 @@ void main() {
     addTearDown(controller.dispose);
     final originalDelta = controller.document.toDelta().toJson();
 
-    await pumpEditor(tester, controller);
+    await pumpEditor(
+      tester,
+      controller,
+      finalTextStyleResolver: finalTextStyleResolver,
+    );
     expect(controller.document.toDelta().toJson(), originalDelta);
     final empty = geometry(tester, emptyOffset, emptyLineIndex);
 
@@ -189,5 +198,63 @@ void main() {
         }),
       );
     });
+  }
+
+  for (final entry in const <({String label, Style style})>[
+    (label: 'regular', style: Style()),
+    (
+      label: 'italic',
+      style: Style.attr(<String, Attribute>{'italic': Attribute.italic}),
+    ),
+    (
+      label: 'bold',
+      style: Style.attr(<String, Attribute>{'bold': Attribute.bold}),
+    ),
+    (
+      label: 'bold italic',
+      style: Style.attr(<String, Attribute>{
+        'bold': Attribute.bold,
+        'italic': Attribute.italic,
+      }),
+    ),
+    (
+      label: 'large bold italic',
+      style: Style.attr(<String, Attribute>{
+        'size': SizeAttribute('30'),
+        'bold': Attribute.bold,
+        'italic': Attribute.italic,
+      }),
+    ),
+  ]) {
+    testWidgets(
+      'resolved ${entry.label} empty caret matches its first character',
+      (tester) async {
+        final roles = <QuillFinalTextStyleRole>[];
+        await verifyTypeDeleteAndReturn(
+          tester,
+          document: Document.fromDelta(
+            Delta()
+              ..insert('lead', entry.style.toJson())
+              ..insert('\n\n')
+              ..insert('tail\n'),
+          ),
+          emptyOffset: 5,
+          emptyLineIndex: 1,
+          awayOffset: 0,
+          pendingStyle: entry.style,
+          checkLineHeight: entry.label == 'large bold italic',
+          finalTextStyleResolver: (context, style, attributes, role) {
+            roles.add(role);
+            if (role == QuillFinalTextStyleRole.emptyLineCaret) {
+              expect(style.fontSize, isNotNull);
+              expect(style.height, isNotNull);
+            }
+            return style.copyWith(fontFamily: 'serif');
+          },
+        );
+        expect(roles, contains(QuillFinalTextStyleRole.emptyLineCaret));
+        expect(roles, contains(QuillFinalTextStyleRole.text));
+      },
+    );
   }
 }

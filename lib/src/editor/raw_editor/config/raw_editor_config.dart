@@ -12,6 +12,7 @@ import '../../../editor/widgets/default_styles.dart';
 import '../../../editor/widgets/delegate.dart';
 import '../../../editor/widgets/link.dart';
 import '../../../toolbar/theme/quill_dialog_theme.dart';
+import '../../config/final_text_style_resolver.dart';
 import '../../widgets/text/magnifier.dart';
 import '../../widgets/text/utils/text_block_utils.dart';
 import '../builders/leading_block_builder.dart';
@@ -58,6 +59,7 @@ class QuillRawEditorConfig {
     this.scrollPhysics,
     this.linkActionPickerDelegate = defaultLinkActionPickerDelegate,
     this.customStyleBuilder,
+    this.finalTextStyleResolver,
     this.customRecognizerBuilder,
     this.floatingCursorDisabled = false,
     this.customLinkPrefixes = const <String>[],
@@ -360,6 +362,7 @@ class QuillRawEditorConfig {
   final EmbedsBuilder embedBuilder;
   final LinkActionPickerDelegate linkActionPickerDelegate;
   final CustomStyleBuilder? customStyleBuilder;
+  final QuillFinalTextStyleResolver? finalTextStyleResolver;
   final CustomRecognizerBuilder? customRecognizerBuilder;
   final bool floatingCursorDisabled;
   final List<String> customLinkPrefixes;
