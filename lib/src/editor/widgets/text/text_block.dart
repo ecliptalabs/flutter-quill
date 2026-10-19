@@ -145,6 +145,9 @@ class EditableTextBlock extends StatelessWidget {
     assert(debugCheckHasMediaQuery(context));
 
     final defaultStyles = QuillStyles.getStyles(context, false);
+    final firstLine = block.children.first as Line;
+    final presentationGapBefore =
+        presentationGapPlan?.gapBefore(firstLine.documentOffset) ?? 0;
     return _EditableBlock(
       block: block,
       textDirection: textDirection,
@@ -154,6 +157,7 @@ class EditableTextBlock extends StatelessWidget {
       decoration:
           _getDecorationForBlock(block, defaultStyles) ?? const BoxDecoration(),
       contentPadding: contentPadding,
+      presentationGapBefore: presentationGapBefore,
       children: _buildChildren(
         context,
         indentLevelCounts,
@@ -268,8 +272,9 @@ class EditableTextBlock extends StatelessWidget {
           cursorCont,
           styles!.inlineCode!,
           null,
-          presentationGapBefore:
-              presentationGapPlan?.gapBefore(line.documentOffset) ?? 0);
+          presentationGapBefore: index == 1
+              ? 0
+              : presentationGapPlan?.gapBefore(line.documentOffset) ?? 0);
       final nodeTextDirection = getDirectionOfNode(line, textDirection);
       children.add(
         Directionality(
@@ -734,28 +739,49 @@ class RenderEditableTextBlock extends RenderEditableContainerBox
     required Decoration decoration,
     super.children,
     EdgeInsets contentPadding = EdgeInsets.zero,
+    double presentationGapBefore = 0,
   })  : _decoration = decoration,
         _configuration = ImageConfiguration(textDirection: textDirection),
         _savedPadding = padding,
         _contentPadding = contentPadding,
+        _presentationGapBefore = presentationGapBefore,
         super(
           container: block,
-          padding: padding.add(contentPadding),
+          padding: padding
+              .add(contentPadding)
+              .add(EdgeInsets.only(top: presentationGapBefore)),
         );
 
   EdgeInsetsGeometry _savedPadding;
   EdgeInsets _contentPadding;
+  double _presentationGapBefore;
+
+  double get presentationGapBefore => _presentationGapBefore;
+
+  set presentationGapBefore(double value) {
+    if (_presentationGapBefore == value) return;
+    _presentationGapBefore = value;
+    _updatePadding();
+  }
 
   set contentPadding(EdgeInsets value) {
     if (_contentPadding == value) return;
     _contentPadding = value;
-    super.setPadding(_savedPadding.add(_contentPadding));
+    _updatePadding();
   }
 
   @override
   void setPadding(EdgeInsetsGeometry value) {
-    super.setPadding(value.add(_contentPadding));
     _savedPadding = value;
+    _updatePadding();
+  }
+
+  void _updatePadding() {
+    super.setPadding(
+      _savedPadding
+          .add(_contentPadding)
+          .add(EdgeInsets.only(top: _presentationGapBefore)),
+    );
   }
 
   BoxPainter? _painter;
@@ -1014,6 +1040,14 @@ class RenderEditableTextBlock extends RenderEditableContainerBox
   }
 
   @override
+  bool hitTestSelf(Offset position) =>
+      _presentationGapBefore > 0 &&
+      position.dx >= 0 &&
+      position.dx < size.width &&
+      position.dy >= 0 &&
+      position.dy < _presentationGapBefore;
+
+  @override
   Rect getLocalRectForCaret(TextPosition position) {
     final child = childAtPosition(position);
     final localPosition = TextPosition(
@@ -1058,7 +1092,10 @@ class RenderEditableTextBlock extends RenderEditableContainerBox
 
   @override
   List<Rect> get presentationGapRects {
-    final result = <Rect>[];
+    final result = <Rect>[
+      if (_presentationGapBefore > 0)
+        Rect.fromLTWH(0, 0, size.width, _presentationGapBefore),
+    ];
     var child = firstChild;
     while (child != null) {
       final parentData = child.parentData as EditableContainerParentData;
@@ -1080,6 +1117,7 @@ class _EditableBlock extends MultiChildRenderObjectWidget {
       required this.scrollBottomInset,
       required this.decoration,
       required this.contentPadding,
+      required this.presentationGapBefore,
       required super.children});
 
   final Block block;
@@ -1089,6 +1127,7 @@ class _EditableBlock extends MultiChildRenderObjectWidget {
   final double scrollBottomInset;
   final Decoration decoration;
   final EdgeInsets? contentPadding;
+  final double presentationGapBefore;
 
   EdgeInsets get _padding => EdgeInsets.only(
       left: horizontalSpacing.left,
@@ -1107,6 +1146,7 @@ class _EditableBlock extends MultiChildRenderObjectWidget {
       scrollBottomInset: scrollBottomInset,
       decoration: decoration,
       contentPadding: _contentPadding,
+      presentationGapBefore: presentationGapBefore,
     );
   }
 
@@ -1119,6 +1159,7 @@ class _EditableBlock extends MultiChildRenderObjectWidget {
       ..scrollBottomInset = scrollBottomInset
       ..setPadding(_padding)
       ..decoration = decoration
-      ..contentPadding = _contentPadding;
+      ..contentPadding = _contentPadding
+      ..presentationGapBefore = presentationGapBefore;
   }
 }
