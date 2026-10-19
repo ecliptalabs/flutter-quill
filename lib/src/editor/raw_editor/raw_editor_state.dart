@@ -622,6 +622,7 @@ class QuillRawEditorState extends EditorState
           finalTextStyleResolver: widget.config.finalTextStyleResolver,
           customLinkPrefixes: widget.config.customLinkPrefixes,
           composingRange: composingRange.value,
+          presentationGapPlan: widget.config.presentationGapPlan,
         );
         result.add(
           Directionality(
@@ -657,6 +658,7 @@ class QuillRawEditorState extends EditorState
       onLaunchUrl: widget.config.onLaunchUrl,
       customLinkPrefixes: widget.config.customLinkPrefixes,
       composingRange: composingRange.value,
+      presentationGapPlan: widget.config.presentationGapPlan,
     );
     final editableTextLine = EditableTextLine(
         node,
@@ -672,7 +674,10 @@ class QuillRawEditorState extends EditorState
         MediaQuery.devicePixelRatioOf(context),
         _cursorCont,
         _styles!.inlineCode!,
-        _getDecoration(node, _styles, attrs));
+        _getDecoration(node, _styles, attrs),
+        presentationGapBefore:
+            widget.config.presentationGapPlan?.gapBefore(node.documentOffset) ??
+                0);
     return editableTextLine;
   }
 

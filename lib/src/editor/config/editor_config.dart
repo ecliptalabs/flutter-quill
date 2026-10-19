@@ -10,6 +10,7 @@ import 'package:meta/meta.dart' show experimental;
 import '../../document/nodes/node.dart';
 import '../../toolbar/theme/quill_dialog_theme.dart';
 import '../embed/embed_editor_builder.dart';
+import '../presentation/presentation_gap.dart';
 import '../raw_editor/builders/leading_block_builder.dart';
 import '../raw_editor/config/events/events.dart';
 import '../raw_editor/config/raw_editor_config.dart';
@@ -88,10 +89,15 @@ class QuillEditorConfig {
     this.readOnlyMouseCursor = SystemMouseCursors.text,
     this.onPerformAction,
     @experimental this.customLeadingBlockBuilder,
+    this.presentationGapPlan,
   });
 
   @experimental
   final LeadingBlockNodeBuilder? customLeadingBlockBuilder;
+
+  /// Optional renderer-only vertical gaps. Omitting this preserves the
+  /// editor's ordinary layout behavior.
+  final QuillPresentationGapPlan? presentationGapPlan;
 
   /// The text placeholder in the quill editor
   final String? placeholder;
@@ -542,6 +548,7 @@ class QuillEditorConfig {
     void Function()? onScribbleActivated,
     EdgeInsets? scribbleAreaInsets,
     void Function(TextInputAction action)? onPerformAction,
+    QuillPresentationGapPlan? presentationGapPlan,
   }) {
     return QuillEditorConfig(
       customLeadingBlockBuilder:
@@ -613,6 +620,7 @@ class QuillEditorConfig {
       onScribbleActivated: onScribbleActivated ?? this.onScribbleActivated,
       scribbleAreaInsets: scribbleAreaInsets ?? this.scribbleAreaInsets,
       onPerformAction: onPerformAction ?? this.onPerformAction,
+      presentationGapPlan: presentationGapPlan ?? this.presentationGapPlan,
     );
   }
 }

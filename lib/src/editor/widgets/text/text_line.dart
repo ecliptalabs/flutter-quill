@@ -36,6 +36,7 @@ class TextLine extends StatefulWidget {
     this.customStyleBuilder,
     this.finalTextStyleResolver,
     this.customRecognizerBuilder,
+    this.presentationGapPlan,
     this.customLinkPrefixes = const <String>[],
     super.key,
   });
@@ -54,6 +55,7 @@ class TextLine extends StatefulWidget {
   final LinkActionPicker linkActionPicker;
   final List<String> customLinkPrefixes;
   final TextRange composingRange;
+  final QuillPresentationGapPlan? presentationGapPlan;
 
   @override
   State<TextLine> createState() => _TextLineState();
@@ -197,6 +199,15 @@ class _TextLineState extends State<TextLine> {
       textScaler: MediaQuery.textScalerOf(context),
       minimumHeight: caretGeometry.minimumHeight,
       caretVerticalOffset: caretGeometry.verticalOffset,
+      presentationGaps: {
+        for (final gap
+            in widget.presentationGapPlan?.gapsInRange(
+                  widget.line.documentOffset + 1,
+                  widget.line.documentOffset + widget.line.length,
+                ) ??
+                const <QuillPresentationGap>[])
+          gap.documentOffset - widget.line.documentOffset: gap.height,
+      },
       child: child,
     );
   }
@@ -850,7 +861,7 @@ class EditableTextLine extends RenderObjectWidget {
       this.cursorCont,
       this.inlineCodeStyle,
       this.decoration,
-      {super.key});
+      {this.presentationGapBefore = 0, super.key});
 
   final Line line;
   final Widget? leading;
@@ -866,6 +877,7 @@ class EditableTextLine extends RenderObjectWidget {
   final CursorCont cursorCont;
   final InlineCodeStyle inlineCodeStyle;
   final BoxDecoration? decoration;
+  final double presentationGapBefore;
 
   @override
   RenderObjectElement createElement() {
@@ -885,7 +897,8 @@ class EditableTextLine extends RenderObjectWidget {
         color,
         cursorCont,
         inlineCodeStyle,
-        decoration);
+        decoration,
+        presentationGapBefore);
   }
 
   @override
@@ -902,14 +915,15 @@ class EditableTextLine extends RenderObjectWidget {
       ..setDevicePixelRatio(devicePixelRatio)
       ..setCursorCont(cursorCont)
       ..setInlineCodeStyle(inlineCodeStyle)
-      ..setDecoration(decoration);
+      ..setDecoration(decoration)
+      ..setPresentationGapBefore(presentationGapBefore);
   }
 
   EdgeInsetsGeometry _getPadding() {
     return EdgeInsetsDirectional.only(
         start: horizontalSpacing.left,
         end: horizontalSpacing.right,
-        top: verticalSpacing.top,
+        top: verticalSpacing.top + presentationGapBefore,
         bottom: verticalSpacing.bottom);
   }
 }
@@ -930,6 +944,7 @@ class RenderEditableTextLine extends RenderEditableBox {
     this.cursorCont,
     this.inlineCodeStyle,
     this.decoration,
+    this.presentationGapBefore,
   );
 
   RenderBox? _leading;
@@ -949,6 +964,7 @@ class RenderEditableTextLine extends RenderEditableBox {
   late Rect _caretPrototype;
   InlineCodeStyle inlineCodeStyle;
   BoxDecoration? decoration;
+  double presentationGapBefore;
   final Map<TextLineSlot, RenderBox> children = <TextLineSlot, RenderBox>{};
 
   Iterable<RenderBox> get _children sync* {
@@ -1067,6 +1083,12 @@ class RenderEditableTextLine extends RenderEditableBox {
   void setDecoration(BoxDecoration? newDecoration) {
     if (decoration == newDecoration) return;
     decoration = newDecoration;
+    markNeedsPaint();
+  }
+
+  void setPresentationGapBefore(double value) {
+    if (presentationGapBefore == value) return;
+    presentationGapBefore = value;
     markNeedsPaint();
   }
 
@@ -1466,11 +1488,19 @@ class RenderEditableTextLine extends RenderEditableBox {
     final boxDecoration = decoration;
     if (boxDecoration != null) {
       final paintRect = offset & size;
+      final canvas = context.canvas;
+      final gaps = presentationGapRects;
+      if (gaps.isNotEmpty) {
+        canvas
+          ..save()
+          ..clipPath(_contentPathExcludingGaps(paintRect, gaps));
+      }
       boxDecoration.createBoxPainter().paint(
-            context.canvas,
+            canvas,
             paintRect.topLeft,
             ImageConfiguration(size: paintRect.size),
           );
+      if (gaps.isNotEmpty) canvas.restore();
     }
 
     if (_body != null) {
@@ -1652,6 +1682,80 @@ class RenderEditableTextLine extends RenderEditableBox {
 
   @override
   Rect getCaretPrototype(TextPosition position) => _caretPrototype;
+
+  @override
+  List<QuillLayoutFragment> getLayoutFragments(Offset offset) {
+    final body = _body!;
+    final bodyOffset = (body.parentData as BoxParentData).offset;
+    final fragmentOffset = offset + bodyOffset;
+    final physicalLines = body
+        .getLayoutLines(line.documentOffset)
+        .map(
+          (geometry) => QuillPhysicalLineGeometry(
+            documentRange: geometry.documentRange,
+            rect: geometry.rect.shift(fragmentOffset),
+          ),
+        )
+        .toList(growable: false);
+    final attrs = line.style.attributes;
+    final kind = body.isEmbed
+        ? QuillLayoutFragmentKind.embed
+        : attrs.containsKey(Attribute.header.key)
+            ? QuillLayoutFragmentKind.header
+            : attrs.containsKey(Attribute.list.key)
+                ? QuillLayoutFragmentKind.listItem
+                : attrs.containsKey(Attribute.blockQuote.key)
+                    ? QuillLayoutFragmentKind.blockQuote
+                    : attrs.containsKey(Attribute.codeBlock.key)
+                        ? QuillLayoutFragmentKind.codeBlock
+                        : QuillLayoutFragmentKind.paragraph;
+    final bodyRect = fragmentOffset & body.size;
+    return [
+      QuillLayoutFragment(
+        documentRange: TextRange(
+          start: line.documentOffset,
+          end: line.documentOffset + line.length,
+        ),
+        kind: kind,
+        rect: bodyRect,
+        physicalLines: physicalLines,
+        embedRect: body.isEmbed ? bodyRect : null,
+      ),
+    ];
+  }
+
+  @override
+  List<Rect> get presentationGapRects {
+    final result = <Rect>[];
+    if (presentationGapBefore > 0) {
+      result.add(Rect.fromLTWH(0, 0, size.width, presentationGapBefore));
+    }
+    final body = _body;
+    if (body != null) {
+      final bodyOffset = (body.parentData as BoxParentData).offset;
+      result.addAll(
+        body.presentationGapRects.map(
+          (rect) => Rect.fromLTRB(
+            0,
+            rect.top + bodyOffset.dy,
+            size.width,
+            rect.bottom + bodyOffset.dy,
+          ),
+        ),
+      );
+    }
+    return result;
+  }
+}
+
+Path _contentPathExcludingGaps(Rect bounds, Iterable<Rect> gaps) {
+  final path = Path()
+    ..fillType = PathFillType.evenOdd
+    ..addRect(bounds);
+  for (final gap in gaps) {
+    path.addRect(gap.shift(bounds.topLeft));
+  }
+  return path;
 }
 
 class _TextLineElement extends RenderObjectElement {

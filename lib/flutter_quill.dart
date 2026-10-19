@@ -18,6 +18,7 @@ export 'src/document/style.dart';
 export 'src/editor/config/final_text_style_resolver.dart';
 export 'src/editor/editor.dart';
 export 'src/editor/embed/embed_editor_builder.dart';
+export 'src/editor/presentation/presentation_gap.dart';
 export 'src/editor/raw_editor/builders/leading_block_builder.dart';
 export 'src/editor/raw_editor/config/events/events.dart';
 export 'src/editor/raw_editor/config/raw_editor_config.dart';

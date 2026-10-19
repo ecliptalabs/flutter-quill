@@ -17,6 +17,7 @@ import '../document/nodes/container.dart' as container_node;
 import '../document/nodes/leaf.dart';
 import 'config/editor_config.dart';
 import 'embed/embed_editor_builder.dart';
+import 'presentation/presentation_gap.dart';
 import 'raw_editor/config/raw_editor_config.dart';
 import 'raw_editor/raw_editor.dart';
 import 'widgets/box.dart';
@@ -328,6 +329,7 @@ class QuillEditorState extends State<QuillEditor>
         readOnlyMouseCursor: config.readOnlyMouseCursor,
         textInputAction: config.textInputAction,
         onPerformAction: config.onPerformAction,
+        presentationGapPlan: config.presentationGapPlan,
       ),
     );
 
@@ -699,6 +701,24 @@ class RenderEditor extends RenderEditableContainerBox
   final CursorCont _cursorController;
   final bool floatingCursorDisabled;
   final bool scrollable;
+
+  /// Returns an immutable, value-only snapshot of the current rendered
+  /// document geometry in editor-local coordinates. This is valid after
+  /// layout.
+  QuillLayoutSnapshot getLayoutSnapshot() {
+    final fragments = <QuillLayoutFragment>[];
+    var child = firstChild;
+    while (child != null) {
+      final parentData = child.parentData as EditableContainerParentData;
+      fragments.addAll(child.getLayoutFragments(parentData.offset));
+      child = parentData.nextSibling;
+    }
+    return QuillLayoutSnapshot(
+      documentRange: TextRange(start: 0, end: document.length),
+      editorRect: Offset.zero & size,
+      fragments: fragments,
+    );
+  }
 
   Document document;
   TextSelection selection;

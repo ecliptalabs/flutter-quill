@@ -16,6 +16,7 @@ import '../../../document/style.dart';
 import '../../config/final_text_style_resolver.dart';
 import '../../editor.dart';
 import '../../embed/embed_editor_builder.dart';
+import '../../presentation/presentation_gap.dart';
 import '../../raw_editor/builders/leading_block_builder.dart';
 import '../box.dart';
 import '../cursor.dart';
@@ -105,6 +106,7 @@ class EditableTextBlock extends StatelessWidget {
     this.finalTextStyleResolver,
     this.customLinkPrefixes = const <String>[],
     this.customLeadingBlockBuilder,
+    this.presentationGapPlan,
     super.key,
   });
 
@@ -136,6 +138,7 @@ class EditableTextBlock extends StatelessWidget {
   final bool? checkBoxReadOnly;
   final List<String> customLinkPrefixes;
   final TextRange composingRange;
+  final QuillPresentationGapPlan? presentationGapPlan;
 
   @override
   Widget build(BuildContext context) {
@@ -252,6 +255,7 @@ class EditableTextBlock extends StatelessWidget {
             customLinkPrefixes: customLinkPrefixes,
             customRecognizerBuilder: customRecognizerBuilder,
             composingRange: composingRange,
+            presentationGapPlan: presentationGapPlan,
           ),
           lineSpacing,
           _getSpacingForLine(line, index, count, defaultStyles),
@@ -263,7 +267,9 @@ class EditableTextBlock extends StatelessWidget {
           MediaQuery.devicePixelRatioOf(context),
           cursorCont,
           styles!.inlineCode!,
-          null);
+          null,
+          presentationGapBefore:
+              presentationGapPlan?.gapBefore(line.documentOffset) ?? 0);
       final nodeTextDirection = getDirectionOfNode(line, textDirection);
       children.add(
         Directionality(
@@ -976,7 +982,21 @@ class RenderEditableTextBlock extends RenderEditableContainerBox
 
     final decorationOffset =
         offset.translate(decorationPadding.left, decorationPadding.top);
+    final gaps = presentationGapRects;
+    if (gaps.isNotEmpty) {
+      final bounds = offset & size;
+      final path = Path()
+        ..fillType = PathFillType.evenOdd
+        ..addRect(bounds);
+      for (final gap in gaps) {
+        path.addRect(gap.shift(offset));
+      }
+      context.canvas
+        ..save()
+        ..clipPath(path);
+    }
     _painter!.paint(context.canvas, decorationOffset, filledConfiguration);
+    if (gaps.isNotEmpty) context.canvas.restore();
     if (debugSaveCount != context.canvas.getSaveCount()) {
       throw StateError(
         '${_decoration.runtimeType} painter had mismatching save and  '
@@ -1022,6 +1042,32 @@ class RenderEditableTextBlock extends RenderEditableContainerBox
       affinity: position.affinity,
     );
     return child.getCaretPrototype(localPosition);
+  }
+
+  @override
+  List<QuillLayoutFragment> getLayoutFragments(Offset offset) {
+    final result = <QuillLayoutFragment>[];
+    var child = firstChild;
+    while (child != null) {
+      final parentData = child.parentData as EditableContainerParentData;
+      result.addAll(child.getLayoutFragments(offset + parentData.offset));
+      child = parentData.nextSibling;
+    }
+    return result;
+  }
+
+  @override
+  List<Rect> get presentationGapRects {
+    final result = <Rect>[];
+    var child = firstChild;
+    while (child != null) {
+      final parentData = child.parentData as EditableContainerParentData;
+      result.addAll(
+        child.presentationGapRects.map((rect) => rect.shift(parentData.offset)),
+      );
+      child = parentData.nextSibling;
+    }
+    return result;
   }
 }
 
