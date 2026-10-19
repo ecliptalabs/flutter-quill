@@ -1009,20 +1009,21 @@ class RenderEditableTextBlock extends RenderEditableContainerBox
     final decorationOffset =
         offset.translate(decorationPadding.left, decorationPadding.top);
     final gaps = presentationGapRects;
-    if (gaps.isNotEmpty) {
-      final bounds = offset & size;
-      final path = Path()
-        ..fillType = PathFillType.evenOdd
-        ..addRect(bounds);
-      for (final gap in gaps) {
-        path.addRect(gap.shift(offset));
+    if (gaps.isEmpty) {
+      _painter!.paint(context.canvas, decorationOffset, filledConfiguration);
+    } else {
+      final decorationBounds = decorationOffset & filledConfiguration.size!;
+      for (final slice in _visibleDecorationSlices(
+        decorationBounds,
+        gaps.map((gap) => gap.shift(offset)),
+      )) {
+        context.canvas
+          ..save()
+          ..clipRect(slice, doAntiAlias: false);
+        _painter!.paint(context.canvas, decorationOffset, filledConfiguration);
+        context.canvas.restore();
       }
-      context.canvas
-        ..save()
-        ..clipPath(path);
     }
-    _painter!.paint(context.canvas, decorationOffset, filledConfiguration);
-    if (gaps.isNotEmpty) context.canvas.restore();
     if (debugSaveCount != context.canvas.getSaveCount()) {
       throw StateError(
         '${_decoration.runtimeType} painter had mismatching save and  '
@@ -1106,6 +1107,41 @@ class RenderEditableTextBlock extends RenderEditableContainerBox
     }
     return result;
   }
+}
+
+List<Rect> _visibleDecorationSlices(Rect bounds, Iterable<Rect> gaps) {
+  final intervals = <({double top, double bottom})>[];
+  for (final gap in gaps) {
+    final top = math.max(bounds.top, gap.top);
+    final bottom = math.min(bounds.bottom, gap.bottom);
+    if (top < bottom) intervals.add((top: top, bottom: bottom));
+  }
+  if (intervals.isEmpty) return [bounds];
+
+  intervals.sort((a, b) => a.top.compareTo(b.top));
+  final slices = <Rect>[];
+  var cursor = bounds.top;
+  for (final interval in intervals) {
+    if (interval.top > cursor) {
+      slices.add(Rect.fromLTRB(
+        bounds.left,
+        cursor,
+        bounds.right,
+        interval.top,
+      ));
+    }
+    cursor = math.max(cursor, interval.bottom);
+    if (cursor >= bounds.bottom) break;
+  }
+  if (cursor < bounds.bottom) {
+    slices.add(Rect.fromLTRB(
+      bounds.left,
+      cursor,
+      bounds.right,
+      bounds.bottom,
+    ));
+  }
+  return slices;
 }
 
 class _EditableBlock extends MultiChildRenderObjectWidget {
