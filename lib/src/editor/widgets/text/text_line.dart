@@ -494,16 +494,18 @@ class _TextLineState extends State<TextLine> {
     TextAlign textAlign,
   ) {
     final selection = widget.controller.selection;
-    if (widget.line.isNotEmpty ||
-        !selection.isCollapsed ||
-        selection.extentOffset != widget.line.documentOffset ||
-        isPlaceholderLine) {
+    if (widget.line.isNotEmpty || isPlaceholderLine) {
       return (minimumHeight: null, verticalOffset: 0);
     }
 
-    final insertionStyle = widget.controller.document
-        .collectStyle(selection.extentOffset, 0)
-        .mergeAll(widget.controller.toggledStyle);
+    var insertionStyle = widget.controller.document.collectStyle(
+      widget.line.documentOffset,
+      0,
+    );
+    if (selection.isCollapsed &&
+        selection.extentOffset == widget.line.documentOffset) {
+      insertionStyle = insertionStyle.mergeAll(widget.controller.toggledStyle);
+    }
     // This geometry is render-only. A uniquely toggled style on an empty line
     // remains ephemeral and may be lost after the selection moves away.
     final caretStyle = lineStyle.merge(_getInlineTextStyle(
